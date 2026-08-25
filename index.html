@@ -1,267 +1,76 @@
 <!doctype html>
-<html lang="ko">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#fffaf4">
-<title>아이랑 어디갈까?</title>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#fffaf4"><title>아이랑 어디갈까?</title>
 <style>
-:root{--bg:#fffaf4;--card:#fff;--ink:#252421;--muted:#807a72;--line:#ece5dc;--soft:#f5f1eb;--accent:#252421;--good:#edf7ee;--bad:#fff0ef}
+:root{--bg:#fffaf4;--ink:#252421;--mut:#79736c;--line:#ece4da;--soft:#f5f0ea;--nv:#03c75a;--good:#edf7ee;--bad:#fff0ef}
 *{box-sizing:border-box}body{margin:0;background:#eee9e3;font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;color:var(--ink)}
-.app{max-width:520px;min-height:100vh;margin:auto;background:var(--bg);padding-bottom:76px}.top{padding:24px 19px 12px}.brand{font-size:25px;font-weight:900}.sub{margin-top:5px;color:var(--muted);font-size:13px}
-main{padding:0 17px 26px}.card{background:var(--card);border:1px solid var(--line);border-radius:19px;padding:16px;margin:11px 0}.label{font-size:13px;font-weight:800;color:#6f6962;margin:15px 0 8px}.chips{display:flex;gap:7px;flex-wrap:wrap}.chip{border:0;background:var(--soft);border-radius:12px;padding:10px 13px;color:#655f58}.chip.on{background:var(--ink);color:white;font-weight:800}.input{width:100%;border:1px solid var(--line);border-radius:12px;padding:12px;background:white}.row{display:flex;gap:8px}.row>*{flex:1}.primary{width:100%;border:0;background:var(--ink);color:#fff;border-radius:15px;padding:15px;font-weight:900;font-size:16px}.ghost{border:0;background:var(--soft);border-radius:12px;padding:11px;font-weight:700}.section{font-size:20px;font-weight:900;margin:20px 2px 8px}.hint{font-size:12px;color:var(--muted);line-height:1.5}.place h3{margin:0 0 7px;font-size:17px}.place .photo-row{margin-top:9px}.meta{font-size:12px;color:var(--muted);line-height:1.65}.stars{font-size:12px;color:#c87922;font-weight:900}.tags{margin-top:5px}.tag{display:inline-block;background:var(--soft);border-radius:7px;padding:4px 7px;font-size:10px;margin:2px 3px 0 0}.admin-rec{background:var(--good)}.admin-not{background:var(--bad)}.actions{display:flex;gap:7px;margin-top:11px}.actions button{flex:1}.reserve{border:0;background:#1c64d1;color:white;border-radius:12px;padding:11px;font-weight:800}.refresh{width:100%;border:1px dashed #cfc5ba;background:#fff;border-radius:14px;padding:13px;font-weight:800;margin:10px 0 2px}.back{border:0;background:none;color:#6d675f;padding:6px 0}.choice{border:2px solid var(--ink)}.small-card{background:white;border:1px solid var(--line);border-radius:16px;padding:14px;margin:8px 0}.small-card h4{margin:0 0 5px}
-.photo-row{display:grid;grid-template-columns:1.35fr 1fr;gap:7px;margin:10px 0}
-.photo{height:112px;border-radius:13px;overflow:hidden;position:relative;background:linear-gradient(135deg,#eee5da,#d8e5dc);display:flex;align-items:flex-end;padding:10px;color:#fff;font-weight:900;text-shadow:0 1px 4px #0008}
-.photo.small{height:112px;background:linear-gradient(135deg,#dfe8ef,#eadfd8)}
-.photo:before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 35%,#0007)}
-.photo span{position:relative;z-index:1;font-size:12px}
-.bizline{margin-top:7px;padding:8px 10px;background:#faf7f2;border-radius:9px;font-size:11px;color:#645f59;line-height:1.5}
-.bizline.closed{background:#fff0ef;color:#9a3b32;font-weight:800}
-.mini-reviews{margin-top:9px}
-.mini-reviews div{font-size:11px;color:#706a63;line-height:1.45;padding:4px 0;border-bottom:1px solid #eee7df}
-.mini-reviews div:last-child{border-bottom:0}
-.review-title{font-size:11px;font-weight:900;color:#4f4a45;margin-bottom:2px}
-.selectbtn{margin-top:8px;width:100%;border:0;background:var(--soft);border-radius:10px;padding:9px;font-weight:800}.selectbtn.on{background:var(--ink);color:white}.summary{background:#f4efe7;border-radius:16px;padding:14px;line-height:1.6;font-size:13px}.bottom{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:min(520px,100%);height:66px;background:#fff;border-top:1px solid var(--line);display:flex;z-index:20}.nav{flex:1;border:0;background:#fff;color:#8b857d;font-size:11px}.nav.on{color:#252421;font-weight:900}.hidden{display:none!important}.modal{position:fixed;inset:0;background:#0005;z-index:50;display:flex;align-items:flex-end;justify-content:center}.sheet{width:min(520px,100%);max-height:80vh;overflow:auto;background:white;border-radius:23px 23px 0 0;padding:18px}.sheethead{display:flex;justify-content:space-between;align-items:center}.close{border:0;background:var(--soft);width:34px;height:34px;border-radius:50%;font-size:20px}.reviewitem{padding:12px 0;border-bottom:1px solid var(--line);font-size:12px;line-height:1.55}.review-preview{margin-top:10px;background:#faf7f2;border-radius:12px;padding:10px}.review-preview div{font-size:11px;line-height:1.45;color:#6f6962;padding:5px 0;border-bottom:1px solid #eee6dc}.review-preview div:last-child{border-bottom:0}.admin-controls{display:flex;gap:7px;margin-top:10px}.admin-controls button{flex:1;border:0;border-radius:10px;padding:10px}.notearea{width:100%;min-height:74px;border:1px solid var(--line);border-radius:11px;padding:10px;margin-top:8px}
-</style>
-</head>
-<body>
-<div class="app">
-  <div class="top"><div class="brand">아이랑 어디갈까?</div><div class="sub">오늘 애기랑 뭐하지? 가까운 곳부터 골라보세요.</div></div>
-  <main id="main"></main>
-  <nav class="bottom">
-    <button class="nav on" data-page="home">⌂<br>홈</button>
-    <button class="nav" data-page="saved">♡<br>찜목록</button>
-    <button class="nav" data-page="admin">⚙<br>관리</button>
-  </nav>
-</div>
-<div id="modal" class="hidden"></div>
-
+.app{max-width:540px;min-height:100vh;margin:auto;background:var(--bg);padding-bottom:70px}.top{padding:22px 18px 11px}.brand{font-size:25px;font-weight:900}.sub{font-size:12px;color:var(--mut);margin-top:5px}
+main{padding:0 16px 26px}.card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:15px;margin:10px 0}.label{font-size:13px;font-weight:900;color:#625d57;margin:14px 0 8px}.chips{display:flex;gap:7px;flex-wrap:wrap}
+button,input,textarea{font:inherit}.chip,.ghost{border:0;background:var(--soft);border-radius:11px;padding:10px 12px;color:#625d57}.chip.on{background:var(--ink);color:#fff;font-weight:900}.input{width:100%;padding:12px;border:1px solid var(--line);border-radius:11px;background:#fff}
+.primary,.select{border:0;background:var(--ink);color:#fff;border-radius:12px;padding:12px;font-weight:900}.primary{width:100%;font-size:15px}.section{font-size:20px;font-weight:900;margin:19px 2px 7px}.hint,.meta{font-size:11px;color:var(--mut);line-height:1.55}.place h3{margin:0 0 6px;font-size:17px}
+.photos{display:grid;grid-template-columns:1.25fr 1fr;gap:6px;margin:9px 0}.photos a{display:block;height:112px;border-radius:12px;overflow:hidden;background:#eee}.photos img{width:100%;height:100%;object-fit:cover}.noimg{height:100px;border-radius:12px;background:linear-gradient(135deg,#e7ded3,#dbe7e0);display:flex;align-items:center;justify-content:center;font-size:28px}
+.naverbox{background:#f8fbf8;border:1px solid #e2eee3;border-radius:12px;padding:10px;margin-top:9px}.navertitle{font-size:11px;font-weight:900;color:#126d37;margin-bottom:5px}.nitem{padding:6px 0;border-bottom:1px solid #e5eee7}.nitem:last-child{border:0}.nitem a{color:#2d2b29;text-decoration:none;font-size:11px;font-weight:800}.ndesc{font-size:10px;color:#736e68;line-height:1.4;margin-top:2px}
+.ops{background:#fff8ec;border-radius:10px;padding:8px 9px;margin-top:8px}.ops b{font-size:11px}.actions{display:flex;gap:7px;margin-top:9px}.actions>*{flex:1}.naverbtn{border:0;background:var(--nv);color:#fff;border-radius:11px;padding:11px;font-weight:900}.refresh{width:100%;border:1px dashed #c9beb1;background:#fff;border-radius:13px;padding:12px;font-weight:900;margin-top:10px}.back{border:0;background:none;color:#6d675f;padding:7px 0;font-weight:800}
+.choice{border:2px solid var(--ink)}.tag{display:inline-block;background:var(--soft);border-radius:7px;padding:4px 7px;font-size:10px;margin:3px 3px 0 0}.tag.good{background:var(--good)}.tag.bad{background:var(--bad)}
+.loading{text-align:center;padding:45px 10px;color:var(--mut)}.spin{width:28px;height:28px;border:3px solid #ddd;border-top-color:#333;border-radius:50%;margin:0 auto 10px;animation:s .8s linear infinite}@keyframes s{to{transform:rotate(360deg)}}.err{background:#fff0ef;color:#963c34;padding:11px;border-radius:11px;font-size:12px;line-height:1.5}
+.bottom{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:min(540px,100%);height:64px;background:#fff;border-top:1px solid var(--line);display:flex;z-index:20}.nav{flex:1;border:0;background:#fff;color:#8b857d;font-size:11px}.nav.on{color:#222;font-weight:900}
+.admin textarea{width:100%;min-height:62px;border:1px solid var(--line);border-radius:9px;padding:8px}.adminrow{display:flex;gap:6px;margin:7px 0}.adminrow button{flex:1;border:0;border-radius:9px;padding:9px}.rec{background:var(--good)}.not{background:var(--bad)}
+</style></head><body><div class="app"><div class="top"><div class="brand">아이랑 어디갈까?</div><div class="sub">실제 이동시간은 카카오, 사진·후기 검색결과는 네이버</div></div><main id="main"></main>
+<nav class="bottom"><button class="nav on" data-page="home">⌂<br>홈</button><button class="nav" data-page="saved">♡<br>찜목록</button><button class="nav" data-page="admin">⚙<br>관리</button></nav></div>
 <script>
-const pool=[
-{id:1,name:"광주 어린이박물관",drive:18,stay:80,age:"3~6세",indoor:true,rating:4.7,reviews:1284,reserve:true,kind:"전시·체험",open:"10:00",close:"18:00",closedDays:[1],subs:["어린이 놀이터","도서관 어린이자료실","짧은 산책코스"],foods:["가족식당 A","한식당 B","돈가스집 C"],cafes:["넓은 베이커리카페","정원카페","유아의자 있는 카페"]},
-{id:2,name:"빛고을 키즈체험관",drive:24,stay:110,age:"3~7세",indoor:true,rating:4.8,reviews:632,reserve:true,kind:"체험",open:"10:00",close:"18:00",closedDays:[1],subs:["작은 공원","만들기 체험","어린이 서점"],foods:["아이밥상","주차편한 식당","가족 중식당"],cafes:["키즈존 카페","대형 카페","베이커리카페"]},
-{id:3,name:"담양 동물체험농장",drive:36,stay:120,age:"2~7세",indoor:false,rating:4.6,reviews:913,reserve:true,kind:"동물",open:"09:30",close:"18:00",closedDays:[1],subs:["메타세쿼이아 산책","작은 놀이터","연못 산책"],foods:["담양 가족식당","국수집","떡갈비집"],cafes:["정원카페","대형카페","한옥카페"]},
-{id:4,name:"나주 어린이과학체험관",drive:32,stay:95,age:"4~8세",indoor:true,rating:4.7,reviews:744,reserve:false,kind:"과학",open:"10:00",close:"18:00",closedDays:[1],subs:["도서관","잔디공원","미니놀이터"],foods:["나주 가족식당","곰탕집","돈가스집"],cafes:["혁신도시 카페","베이커리카페","테라스카페"]},
-{id:5,name:"화순 숲체험원",drive:39,stay:100,age:"3~8세",indoor:false,rating:4.8,reviews:1015,reserve:true,kind:"자연",open:"09:00",close:"18:00",closedDays:[1],subs:["숲 놀이터","생태관찰로","작은 전시관"],foods:["화순 한식당","아이와 가기 좋은 식당","국수집"],cafes:["숲카페","대형카페","베이커리카페"]},
-{id:6,name:"장성 어린이공방",drive:41,stay:90,age:"4~8세",indoor:true,rating:4.8,reviews:518,reserve:true,kind:"공예",open:"10:00",close:"18:00",closedDays:[1],subs:["황룡강 산책","작은 놀이터","도서관"],foods:["장성 가족식당","한식당","브런치식당"],cafes:["강변카페","베이커리카페","정원카페"]},
-{id:7,name:"순천만 어린이생태관",drive:58,stay:120,age:"3~8세",indoor:true,rating:4.7,reviews:1402,reserve:false,kind:"생태",open:"10:00",close:"18:00",closedDays:[1],subs:["정원 산책","어린이놀이터","짧은 전시"],foods:["순천 가족식당","국밥집","돈가스집"],cafes:["정원카페","대형카페","키즈존카페"]},
-{id:8,name:"곡성 기차마을 어린이체험",drive:61,stay:150,age:"3~8세",indoor:false,rating:4.6,reviews:1890,reserve:true,kind:"놀이",open:"09:00",close:"18:00",closedDays:[1],subs:["장미공원","미니동물원","기차전시"],foods:["곡성 가족식당","한식당","국수집"],cafes:["기차마을 카페","베이커리카페","강변카페"]},
-{id:9,name:"정읍 어린이기적의도서관",drive:66,stay:80,age:"2~8세",indoor:true,rating:4.7,reviews:504,reserve:false,kind:"책·문화",open:"10:00",close:"18:00",closedDays:[1],subs:["공원","어린이놀이터","미술전시"],foods:["정읍 가족식당","한식당","파스타집"],cafes:["대형카페","베이커리카페","키즈카페"]},
-{id:10,name:"남원 어린이체험센터",drive:69,stay:120,age:"3~8세",indoor:true,rating:4.8,reviews:620,reserve:true,kind:"체험",open:"10:00",close:"18:00",closedDays:[1],subs:["광한루 산책","작은공원","전통놀이"],foods:["남원 가족식당","추어탕집","돈가스집"],cafes:["한옥카페","베이커리카페","정원카페"]},
-{id:11,name:"하동 차문화 어린이체험",drive:72,stay:95,age:"4~8세",indoor:true,rating:4.6,reviews:412,reserve:true,kind:"문화",open:"10:00",close:"18:00",closedDays:[1],subs:["차밭 산책","작은 박물관","전망대"],foods:["하동 가족식당","한식당","국수집"],cafes:["차밭카페","한옥카페","베이커리카페"]},
-{id:12,name:"사천 항공 어린이체험관",drive:74,stay:130,age:"4~9세",indoor:true,rating:4.8,reviews:973,reserve:true,kind:"항공",open:"10:00",close:"18:00",closedDays:[1],subs:["항공공원","전시관","놀이터"],foods:["사천 가족식당","해물식당","돈가스집"],cafes:["바다카페","대형카페","베이커리카페"]}
-];
-
-let state={
- date:"오늘",age:"3~4세",period:"오전",nap:"필요",drive:30,origin:"우리집",originText:"",
- page:0,main1:null,main2:null,sub:null,food:null,cafe:null,
- saved:JSON.parse(localStorage.getItem("littletripSaved")||"[]"),
- admin:JSON.parse(localStorage.getItem("littletripAdmin")||"{}")
-};
-
-function saveLocal(){localStorage.setItem("littletripSaved",JSON.stringify(state.saved));localStorage.setItem("littletripAdmin",JSON.stringify(state.admin))}
-function setNav(page){document.querySelectorAll(".nav").forEach(n=>n.classList.toggle("on",n.dataset.page===page))}
-function setOption(k,v){state[k]=v;renderHome()}
-function renderHome(){
- setNav("home");
- main.innerHTML=`<div class="card">
-   <div class="label">📍 어디에서 출발할까요?</div>
-   <div class="chips">
-    ${["우리집","현재 위치","직접 입력"].map(x=>`<button class="chip ${state.origin===x?"on":""}" onclick="setOrigin('${x}')">${x}</button>`).join("")}
-   </div>
-   ${state.origin==="직접 입력"?`<input class="input" placeholder="출발지 주소 또는 장소" value="${state.originText}" oninput="state.originText=this.value">`:""}
-   <div class="label">📅 언제?</div><div class="chips">${["오늘","내일","주말"].map(x=>`<button class="chip ${state.date===x?"on":""}" onclick="setOption('date','${x}')">${x}</button>`).join("")}</div>
-   <div class="label">👶 아이 나이</div><div class="chips">${["1~2세","3~4세","5~6세","7세+"].map(x=>`<button class="chip ${state.age===x?"on":""}" onclick="setOption('age','${x}')">${x}</button>`).join("")}</div>
-   <div class="label">🕐 일정</div><div class="chips">${["오전","오후","종일"].map(x=>`<button class="chip ${state.period===x?"on":""}" onclick="setOption('period','${x}')">${x}</button>`).join("")}</div>
-   <div class="label">😴 낮잠</div><div class="chips">${["필요","필요 없음"].map(x=>`<button class="chip ${state.nap===x?"on":""}" onclick="setOption('nap','${x}')">${x}</button>`).join("")}</div>
-   <div class="label">🚗 집에서 메인 콘텐츠까지</div><div class="chips"><button class="chip ${state.drive===30?"on":""}" onclick="setOption('drive',30)">약 30분</button><button class="chip ${state.drive===60?"on":""}" onclick="setOption('drive',60)">약 1시간</button></div>
-   <div class="hint">'약 30분'은 약 40분까지, '약 1시간'은 약 1시간 15분까지 후보를 보여줍니다.</div>
-   <button class="primary" style="margin-top:16px" onclick="showMainRecommendations()">메인 콘텐츠 추천받기</button>
- </div>`;
+const main=document.getElementById("main"), LS={g:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},s:(k,v)=>localStorage.setItem(k,JSON.stringify(v))};
+let S={date:"오늘",age:"3~4세",period:"오전",nap:"필요",drive:30,origin:"우리집",originText:"",home:LS.g("lt_home",null),originPos:null,candidates:[],offset:0,main1:null,main2:null,near:{sub:[],food:[],cafe:[]},pick:{sub:null,food:null,cafe:null},saved:LS.g("lt_saved",[]),admin:LS.g("lt_admin",{})};
+function esc(s=""){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
+function strip(s=""){return String(s).replace(/<[^>]*>/g,"").replace(/&quot;/g,'"').replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">")}
+function navSet(p){document.querySelectorAll(".nav").forEach(x=>x.classList.toggle("on",x.dataset.page===p))}
+function load(t){main.innerHTML=`<div class="loading"><div class="spin"></div>${esc(t)}</div>`}
+function err(t){main.innerHTML=`<div class="err">${esc(t)}</div><button class="primary" style="margin-top:10px" onclick="home()">홈으로</button>`}
+async function api(url,opt){const r=await fetch(url,opt);const d=await r.json();if(!r.ok||!d.ok)throw Error(d.error||"API 오류");return d}
+function setv(k,v){S[k]=v;home()}
+function home(){navSet("home");main.innerHTML=`<div class="card">
+<div class="label">📍 어디에서 출발할까요?</div><div class="chips">${["우리집","현재 위치","직접 입력"].map(x=>`<button class="chip ${S.origin===x?"on":""}" onclick="setOrigin('${x}')">${x}</button>`).join("")}</div>
+${S.origin==="우리집"?`<div class="hint" style="margin-top:6px">${S.home?"우리집 위치 저장됨":"관리 메뉴에서 현재 위치를 우리집으로 한 번 저장해 주세요."}</div>`:""}
+${S.origin==="직접 입력"?`<input class="input" style="margin-top:8px" value="${esc(S.originText)}" placeholder="주소나 장소명" oninput="S.originText=this.value">`:""}
+<div class="label">📅 언제?</div><div class="chips">${["오늘","내일","주말"].map(x=>`<button class="chip ${S.date===x?"on":""}" onclick="setv('date','${x}')">${x}</button>`).join("")}</div>
+<div class="label">👶 아이 나이</div><div class="chips">${["1~2세","3~4세","5~6세","7세+"].map(x=>`<button class="chip ${S.age===x?"on":""}" onclick="setv('age','${x}')">${x}</button>`).join("")}</div>
+<div class="label">🕐 일정</div><div class="chips">${["오전","오후","종일"].map(x=>`<button class="chip ${S.period===x?"on":""}" onclick="setv('period','${x}')">${x}</button>`).join("")}</div>
+<div class="label">😴 낮잠</div><div class="chips">${["필요","필요 없음"].map(x=>`<button class="chip ${S.nap===x?"on":""}" onclick="setv('nap','${x}')">${x}</button>`).join("")}</div>
+<div class="label">🚗 메인 콘텐츠까지</div><div class="chips"><button class="chip ${S.drive===30?"on":""}" onclick="setv('drive',30)">약 30분</button><button class="chip ${S.drive===60?"on":""}" onclick="setv('drive',60)">약 1시간</button></div>
+<div class="hint">'약 30분'은 차량 약 40분까지, '약 1시간'은 약 1시간 15분까지 포함합니다.</div>
+<button class="primary" style="margin-top:14px" onclick="searchMain()">실제 장소 추천받기</button></div>`}
+function setOrigin(x){S.origin=x;home()}
+async function origin(){
+ if(S.origin==="우리집"){if(!S.home)throw Error("관리 메뉴에서 우리집 위치를 먼저 저장해 주세요.");return S.home}
+ if(S.origin==="현재 위치")return await new Promise((ok,no)=>navigator.geolocation.getCurrentPosition(p=>ok({x:p.coords.longitude,y:p.coords.latitude}),()=>no(Error("현재 위치 권한을 허용해 주세요.")),{enableHighAccuracy:true,timeout:10000}));
+ if(!S.originText.trim())throw Error("출발지를 입력해 주세요.");
+ return (await api(`/api/app?mode=geocode&q=${encodeURIComponent(S.originText.trim())}`)).origin;
 }
-function setOrigin(x){
- state.origin=x;
- if(x==="현재 위치"){
-   if(navigator.geolocation) navigator.geolocation.getCurrentPosition(()=>{},()=>{});
- }
- renderHome();
-}
-
-function getCandidates(){
- const max=state.drive===30?40:75;
- return pool.filter(p=>p.drive<=max);
-}
-function pageSlice(list){
- const start=(state.page*6)%Math.max(list.length,1);
- const out=[];
- for(let i=0;i<Math.min(6,list.length);i++) out.push(list[(start+i)%list.length]);
- return out;
-}
-function showMainRecommendations(){
- setNav("home");
- const list=getCandidates();
- const six=pageSlice(list);
- main.innerHTML=`<button class="back" onclick="renderHome()">← 조건 다시 선택</button>
- <div class="section">오늘 갈 메인 콘텐츠</div>
- <div class="hint">먼저 한 곳을 고르세요. 그다음 이 장소를 기준으로 보조 콘텐츠·식당·카페를 보여드립니다.</div>
- ${six.map(placeCard).join("")}
- <button class="refresh" onclick="refreshSix()">🔄 마음에 드는 곳이 없어요 · 다른 6곳 추천</button>`;
-}
-function refreshSix(){state.page++;showMainRecommendations()}
-
-function dayIndexForSelection(){
- const now=new Date();
- if(state.date==="오늘") return now.getDay();
- if(state.date==="내일"){ const d=new Date(now); d.setDate(d.getDate()+1); return d.getDay(); }
- if(state.date==="주말"){
-   const d=new Date(now);
-   let add=(6-d.getDay()+7)%7; if(add===0 && d.getHours()>12) add=7;
-   d.setDate(d.getDate()+add); return d.getDay();
- }
- return now.getDay();
-}
-function dayName(i){return ["일","월","화","수","목","금","토"][i]}
-function visualLabel(name, kind){
- const icon = kind.includes("카페")?"☕":kind.includes("식당")||kind.includes("음식")?"🍽️":kind.includes("동물")?"🐑":kind.includes("자연")?"🌿":kind.includes("책")?"📚":kind.includes("과학")?"🧪":kind.includes("공예")?"🎨":"🧸";
- return `<div class="photo-row"><div class="photo"><span>${icon} ${name}</span></div><div class="photo small"><span>대표 이미지 2</span></div></div>`;
-}
-function scheduleInfo(item){
- const day=dayIndexForSelection();
- const closed=(item.closedDays||[]).includes(day);
- if(closed) return {closed:true,text:`${dayName(day)}요일 휴무`};
- return {closed:false,text:`영업 ${item.open||"10:00"} ~ ${item.close||"18:00"}${item.lastOrder?` · 라스트오더 ${item.lastOrder}`:""}`};
-}
-function secondaryReviews(name,type){
- const base = type==="cafe" ? [
-  `“${name} 공간이 넓고 아이와 앉기 편했어요.”`,
-  `“주차가 편하고 음료 기다리는 시간도 길지 않았어요.”`,
-  `“유아 동반 손님이 꽤 많았어요.”`
- ] : type==="food" ? [
-  `“${name} 아이와 함께 먹기 무난했어요.”`,
-  `“아기의자나 가족석 이용이 편했어요.”`,
-  `“주차 후 입장 동선이 편했습니다.”`
- ] : [
-  `“${name} 메인 일정 뒤에 잠깐 들르기 좋았어요.”`,
-  `“30~50분 정도 짧게 즐기기 괜찮았어요.”`,
-  `“아이 컨디션에 따라 가볍게 추가하기 좋아요.”`
- ];
- return base;
-}
-
-function sampleReviews(p){
- const base=[
-  `“${p.name} 아이와 가기 괜찮았어요.”`,
-  `“${p.age} 정도 아이가 즐기기 좋았습니다.”`,
-  `“예상 체류시간은 ${Math.max(40,p.stay-20)}~${p.stay}분 정도였어요.”`,
-  p.indoor?`“실내라 날씨 영향 없이 이용하기 편했어요.”`:`“야외라 아이가 뛰어놀기 좋았어요.”`,
-  `“주말에는 조금 일찍 가는 편이 좋습니다.”`
- ];
- return base.slice(0,4);
-}
-function placeCard(p){
- const a=state.admin[p.id]||{};
- return `<div class="card place ${a.status==="rec"?"admin-rec":a.status==="not"?"admin-not":""}">
-  <h3>${p.name}</h3>
-  ${visualLabel(p.name,p.kind)}
-  <div class="stars">★ ${p.rating} <span class="meta">· 리뷰 ${p.reviews.toLocaleString()}개</span></div>
-  <div class="meta">🚗 약 ${p.drive}분 · ⏱ 예상 체류 ${p.stay}분 · ${p.indoor?"실내":"야외"} · ${p.age}</div>
-  <div class="bizline">${scheduleInfo(p).text}</div>
-  <div class="tags"><span class="tag">${p.kind}</span>${p.reserve?'<span class="tag">예약 가능</span>':''}${a.status?`<span class="tag">관리자 ${a.status==="rec"?"추천":"비추천"}</span>`:""}</div>
-  ${a.note?`<div class="hint" style="margin-top:8px"><b>관리자 멘트</b> · ${a.note}</div>`:""}
-  <div class="review-preview">${sampleReviews(p).map(r=>`<div>${r}</div>`).join("")}</div>
-  <button class="primary" style="margin-top:10px" onclick="chooseMain(${p.id})">선택</button>
- </div>`;
-}
-function chooseMain(id){
- state.main1=pool.find(p=>p.id===id);state.main2=null;state.sub=null;state.food=null;state.cafe=null;
- if(state.period==="종일") chooseSecondMain();
- else renderAfterMain();
-}
-function chooseSecondMain(){
- const p=state.main1;
- const alternatives=getCandidates().filter(x=>x.id!==p.id).slice(0,6);
- main.innerHTML=`<button class="back" onclick="showMainRecommendations()">← 첫 메인 다시 고르기</button>
- <div class="section">종일 일정이라 메인 콘텐츠를 하나 더 골라주세요</div>
- <div class="summary"><b>오전 메인</b><br>${p.name} · 예상 ${p.stay}분</div>
- ${alternatives.map(x=>`<div class="small-card"><h4>${x.name}</h4><div class="meta">🚗 약 ${x.drive}분 · ⏱ ${x.stay}분 · ${x.kind}</div><button class="selectbtn" onclick="chooseMain2(${x.id})">오후 메인으로 선택</button></div>`).join("")}`;
-}
-function chooseMain2(id){state.main2=pool.find(p=>p.id===id);renderAfterMain()}
-function renderAfterMain(){
- const p=state.main1;
- main.innerHTML=`<button class="back" onclick="${state.period==="종일"?"chooseSecondMain()":"showMainRecommendations()"}">← 메인 콘텐츠 다시 고르기</button>
- <div class="section">선택한 메인 콘텐츠</div>
- <div class="card choice"><h3>${p.name}</h3><div class="meta">🚗 약 ${p.drive}분 · ⏱ 예상 ${p.stay}분</div>${p.reserve?'<button class="reserve" style="width:100%;margin-top:10px" onclick="reserve(\''+p.name+'\')">네이버 예약 연결</button>':""}</div>
- ${state.main2?`<div class="card choice"><h3>${state.main2.name}</h3><div class="meta">종일 일정 두 번째 메인 · ⏱ ${state.main2.stay}분</div>${state.main2.reserve?'<button class="reserve" style="width:100%;margin-top:10px" onclick="reserve(\''+state.main2.name+'\')">네이버 예약 연결</button>':""}</div>`:""}
- <div class="section">보조 콘텐츠</div>
- <div class="hint">메인 콘텐츠가 짧거나 시간이 남을 때만 추가하세요.</div>
- ${p.subs.map((x,i)=>smallOption("sub",x,`${3+i*3}분 거리 · 약 ${30+i*10}분`)).join("")}
- <div class="section">🍚 근처 식당</div>
- ${p.foods.map((x,i)=>smallOption("food",x,`${5+i*2}분 거리 · 아이 동반 추천`,i===0)).join("")}
- <div class="section">☕ 근처 카페</div>
- ${p.cafes.map((x,i)=>smallOption("cafe",x,`${4+i*3}분 거리 · 유아 동반`,i===1)).join("")}
- <button class="primary" style="margin-top:16px" onclick="showFinal()">선택한 내용으로 일정 보기</button>`;
-}
-function smallOption(type,name,meta,reservable=false){
- const on=state[type]===name;
- const ix = type==="sub" ? (state.main1?.subs||[]).indexOf(name) : type==="food" ? (state.main1?.foods||[]).indexOf(name) : (state.main1?.cafes||[]).indexOf(name);
- const defaults = type==="cafe"
-   ? [{open:"09:30",close:"21:30",closedDays:[1]},{open:"10:00",close:"22:00",closedDays:[2]},{open:"09:00",close:"20:30",closedDays:[]}]
-   : type==="food"
-   ? [{open:"11:00",close:"20:30",closedDays:[1],lastOrder:"19:45"},{open:"10:30",close:"21:00",closedDays:[]},{open:"11:00",close:"20:00",closedDays:[2]}]
-   : [{open:"09:00",close:"18:00",closedDays:[1]},{open:"10:00",close:"19:00",closedDays:[]},{open:"09:30",close:"17:30",closedDays:[2]}];
- const biz = defaults[(ix<0?0:ix)%defaults.length];
- const s = scheduleInfo(biz);
- const reviews=secondaryReviews(name,type);
- const title = type==="cafe"?"카페":type==="food"?"식당":"보조 콘텐츠";
- return `<div class="small-card">
-   <h4>${name}</h4>
-   ${visualLabel(name,title)}
-   <div class="meta">${meta}</div>
-   <div class="bizline ${s.closed?"closed":""}">${s.closed?"⛔ ":"🕐 "}${s.text}</div>
-   <div class="mini-reviews"><div class="review-title">최근 후기 미리보기</div>${reviews.map(r=>`<div>${r}</div>`).join("")}</div>
-   <div class="actions">
-     <button class="selectbtn ${on?"on":""}" ${s.closed?"disabled style='opacity:.45'":""} onclick="${s.closed?"":`pick('${type}','${name}')`}">${s.closed?"휴무":"선택"}</button>
-     ${reservable && !s.closed?`<button class="reserve" onclick="reserve('${name}')">네이버 예약</button>`:""}
-   </div>
- </div>`;
-}
-function pick(type,name){state[type]=state[type]===name?null:name;renderAfterMain()}
-function showFinal(){
- const parts=[state.main1?.name,state.sub,state.food,state.cafe,state.main2?.name].filter(Boolean);
- main.innerHTML=`<button class="back" onclick="renderAfterMain()">← 구성 다시 고르기</button>
- <div class="section">오늘 일정</div>
- <div class="summary">${parts.map((x,i)=>`${i+1}. ${x}`).join("<br>")}</div>
- <div class="hint" style="margin:10px 2px">실제 API 연결 후에는 각 장소의 영업시간·예약 가능 여부·실제 이동시간을 다시 검증해 최종 시간표를 계산합니다.</div>
- <button class="primary" onclick="saveCurrent()">이 일정 찜하기</button>`;
-}
-function saveCurrent(){
- const label=[state.main1?.name,state.sub,state.food,state.cafe,state.main2?.name].filter(Boolean).join(" → ");
- state.saved.unshift(label);state.saved=[...new Set(state.saved)];saveLocal();alert("찜목록에 저장했습니다.");
-}
-function reserve(name){alert(name+"의 실제 네이버 예약 URL이 연결되면 이 버튼으로 바로 이동합니다.")}
-function openReviews(id){
- const p=pool.find(x=>x.id===id);
- modal.innerHTML=`<div class="modal" onclick="if(event.target===this)closeModal()"><div class="sheet"><div class="sheethead"><h3>${p.name}</h3><button class="close" onclick="closeModal()">×</button></div><div class="stars">★ ${p.rating} · 리뷰 ${p.reviews.toLocaleString()}개</div><div class="reviewitem">아이와 방문하기 좋았다는 후기 예시입니다.</div><div class="reviewitem">실제 서비스에서는 사용권한이 확보된 리뷰 데이터만 표시합니다.</div></div></div>`;
- modal.classList.remove("hidden");
-}
-function closeModal(){modal.classList.add("hidden");modal.innerHTML=""}
-function showSaved(){
- setNav("saved");
- main.innerHTML=`<div class="section">찜목록</div>${state.saved.length?state.saved.map(x=>`<div class="card">${x}</div>`).join(""):'<div class="card hint">아직 찜한 일정이 없습니다.</div>'}`;
-}
-function showAdmin(){
- setNav("admin");
- main.innerHTML=`<div class="section">관리자 장소 관리</div><div class="hint">직접 다녀온 장소는 추천/비추천과 멘트를 남겨 추천에 반영하세요.</div>
- ${pool.map(p=>{const a=state.admin[p.id]||{};return `<div class="card"><h3>${p.name}</h3>
- <div class="admin-controls"><button class="admin-rec" onclick="setAdmin(${p.id},'rec')">⭐ 추천</button><button class="admin-not" onclick="setAdmin(${p.id},'not')">❌ 비추천</button><button onclick="setAdmin(${p.id},'')">보류</button></div>
- <textarea class="notearea" id="note${p.id}" placeholder="직접 방문 멘트">${a.note||""}</textarea>
- <button class="ghost" style="width:100%;margin-top:7px" onclick="saveNote(${p.id})">멘트 저장</button></div>`}).join("")}`;
-}
-function setAdmin(id,status){state.admin[id]={...(state.admin[id]||{}),status};saveLocal();showAdmin()}
-function saveNote(id){state.admin[id]={...(state.admin[id]||{}),note:document.getElementById("note"+id).value};saveLocal();showAdmin()}
-
-document.querySelectorAll(".nav").forEach(n=>n.onclick=()=>{if(n.dataset.page==="home")renderHome();if(n.dataset.page==="saved")showSaved();if(n.dataset.page==="admin")showAdmin()});
-renderHome();
-</script>
-</body>
-</html>
+async function searchMain(){load("주변 장소를 찾고 실제 차량시간을 계산하고 있어요");try{S.originPos=await origin();const maxMinutes=S.drive===30?40:75;const d=await api("/api/app?mode=main",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...S.originPos,age:S.age,maxMinutes})});S.candidates=d.items.filter(x=>S.admin[x.id]?.status!=="not");S.offset=0;if(!S.candidates.length)throw Error("조건 안에서 후보를 찾지 못했습니다.");listMain()}catch(e){err(e.message)}}
+function adminTag(p){const a=S.admin[p.id]||{};return `${a.status?`<span class="tag ${a.status==="rec"?"good":"bad"}">관리자 ${a.status==="rec"?"추천":"비추천"}</span>`:""}${a.note?`<span class="tag good">${esc(a.note)}</span>`:""}`}
+function baseCard(p,choose=true){return `<div class="card place ${S.admin[p.id]?.status==="rec"?"choice":""}" id="card_${p.id}"><h3>${esc(p.name)}</h3><div class="meta">🚗 실제 차량 약 ${p.route_minutes}분 · ${esc(p.category||"")}<br>${esc(p.road_address||p.address||"")}</div>${adminTag(p)}<div id="nv_${p.id}"><div class="hint" style="margin-top:9px">네이버 사진·후기 검색결과 불러오는 중…</div></div><div class="actions"><button class="naverbtn" onclick="openNaver('${esc(p.name)}')">네이버에서 보기</button>${choose?`<button class="select" onclick="chooseMain('${p.id}')">선택</button>`:""}</div></div>`}
+function listMain(){navSet("home");const xs=S.candidates.slice(S.offset,S.offset+6);main.innerHTML=`<button class="back" onclick="home()">← 조건 다시 선택</button><div class="section">오늘 갈 메인 콘텐츠</div><div class="hint">추천 순위는 카카오 장소·실제 차량시간으로 계산합니다. 아래 네이버 검색결과는 참고정보입니다.</div>${xs.map(x=>baseCard(x)).join("")}<button class="refresh" onclick="next6()">🔄 마음에 드는 곳이 없어요 · 다른 6곳 추천</button>`;xs.forEach(enrich)}
+function next6(){if(S.offset+6<S.candidates.length)S.offset+=6;else S.offset=0;listMain()}
+function openNaver(name){window.open(`https://m.search.naver.com/search.naver?query=${encodeURIComponent(name)}`,"_blank")}
+async function enrich(p){try{const d=(await api(`/api/app?mode=naver&name=${encodeURIComponent(p.name)}&address=${encodeURIComponent(p.road_address||p.address||"")}`)).data;const el=document.getElementById("nv_"+p.id);if(el)el.innerHTML=naverBox(d,p)}catch(e){const el=document.getElementById("nv_"+p.id);if(el)el.innerHTML=`<div class="hint">네이버 검색결과를 불러오지 못했습니다.</div>`}}
+function naverBox(d,p){const imgs=(d.images||[]).slice(0,2);const blogs=(d.blogs||[]).slice(0,3),cafes=(d.cafes||[]).slice(0,2),ops=(d.operations||[]).slice(0,2);
+return `<div class="naverbox"><div class="navertitle">NAVER 검색결과</div>${imgs.length?`<div class="photos">${imgs.map(x=>`<a href="${x.link}" target="_blank" rel="noopener"><img src="${x.thumbnail||x.link}" alt=""></a>`).join("")}</div>`:`<div class="noimg">📷</div>`}
+${ops.length?`<div class="ops"><b>영업시간·휴무 관련 검색결과</b>${ops.map(x=>`<div class="nitem"><a href="${x.link}" target="_blank">${esc(strip(x.title))}</a><div class="ndesc">${esc(strip(x.description||""))}</div></div>`).join("")}</div>`:`<div class="ops"><b>영업시간</b><div class="ndesc">공식 검색 API에서 구조화된 영업시간을 제공하지 않아 네이버에서 최종 확인이 필요합니다.</div></div>`}
+${blogs.length||cafes.length?`<div style="margin-top:8px"><div class="navertitle">블로그·카페 후기 검색결과</div>${[...blogs,...cafes].slice(0,5).map(x=>`<div class="nitem"><a href="${x.link}" target="_blank">${esc(strip(x.title))}</a><div class="ndesc">${esc(strip(x.description||""))}</div></div>`).join("")}</div>`:""}
+${d.booking?`<a class="naverbtn" style="display:block;text-align:center;text-decoration:none;margin-top:8px" href="${d.booking.link}" target="_blank">네이버 예약</a>`:""}<div class="hint" style="margin-top:6px">사진·후기·운영정보 검색결과: NAVER API HUB</div></div>`}
+function chooseMain(id){S.main1=S.candidates.find(x=>x.id===id);S.pick={sub:null,food:null,cafe:null};if(S.period==="종일")secondMain();else around()}
+function secondMain(){const xs=S.candidates.filter(x=>x.id!==S.main1.id).slice(0,8);main.innerHTML=`<button class="back" onclick="listMain()">← 첫 메인 다시 고르기</button><div class="section">종일 일정이라 메인 콘텐츠를 하나 더 골라주세요</div>${baseCard(S.main1,false)}${xs.map(x=>`<div class="card"><b>${esc(x.name)}</b><div class="meta">출발지에서 ${x.route_minutes}분 · ${esc(x.category)}</div><button class="select" style="width:100%;margin-top:7px" onclick="pickSecond('${x.id}')">두 번째 메인 선택</button></div>`).join("")}`;enrich(S.main1)}
+function pickSecond(id){S.main2=S.candidates.find(x=>x.id===id);around()}
+async function around(){load("메인 장소 주변 보조 콘텐츠·식당·카페를 찾고 있어요");try{const o={x:S.main1.x,y:S.main1.y};const [sub,food,cafe]=await Promise.all(["sub","food","cafe"].map(type=>api("/api/app?mode=nearby",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...o,type})})));S.near={sub:sub.items.filter(x=>S.admin[x.id]?.status!=="not"),food:food.items.filter(x=>S.admin[x.id]?.status!=="not"),cafe:cafe.items.filter(x=>S.admin[x.id]?.status!=="not")};renderAround()}catch(e){err(e.message)}}
+function mini(p,type){const on=S.pick[type]?.id===p.id;return `<div class="card place ${on?"choice":""}"><h3>${esc(p.name)}</h3><div class="meta">🚗 메인에서 약 ${p.route_minutes}분 · ${esc(p.category)}<br>${esc(p.road_address||p.address||"")}</div>${adminTag(p)}<div id="nv_${p.id}"><div class="hint">네이버 사진·후기 검색결과 불러오는 중…</div></div><div class="actions"><button class="naverbtn" onclick="openNaver('${esc(p.name)}')">네이버 보기</button><button class="select" onclick="pickNear('${type}','${p.id}')">${on?"선택됨":"선택"}</button></div></div>`}
+function renderAround(){main.innerHTML=`<button class="back" onclick="${S.period==="종일"?"secondMain()":"listMain()"}">← 메인 다시 고르기</button><div class="section">선택한 메인</div>${baseCard(S.main1,false)}${S.main2?`<div class="section">두 번째 메인</div>${baseCard(S.main2,false)}`:""}<div class="section">보조 콘텐츠</div>${S.near.sub.slice(0,5).map(x=>mini(x,"sub")).join("")||'<div class="card hint">적당한 보조 콘텐츠가 없습니다.</div>'}<div class="section">🍚 근처 식당</div>${S.near.food.slice(0,5).map(x=>mini(x,"food")).join("")}<div class="section">☕ 근처 카페</div>${S.near.cafe.slice(0,5).map(x=>mini(x,"cafe")).join("")}<button class="primary" onclick="final()">선택한 내용으로 일정 보기</button>`;[S.main1,S.main2,...S.near.sub.slice(0,5),...S.near.food.slice(0,5),...S.near.cafe.slice(0,5)].filter(Boolean).forEach(enrich)}
+function pickNear(type,id){const p=S.near[type].find(x=>x.id===id);S.pick[type]=S.pick[type]?.id===id?null:p;renderAround()}
+function final(){const xs=[S.main1,S.pick.sub,S.pick.food,S.pick.cafe,S.main2].filter(Boolean);main.innerHTML=`<button class="back" onclick="renderAround()">← 다시 고르기</button><div class="section">오늘 일정</div>${xs.map((x,i)=>`<div class="card"><b>${i+1}. ${esc(x.name)}</b><div class="meta">이동 약 ${x.route_minutes}분</div></div>`).join("")}<button class="primary" onclick="saveNow()">이 일정 찜하기</button>`}
+function saveNow(){S.saved.unshift([S.main1,S.pick.sub,S.pick.food,S.pick.cafe,S.main2].filter(Boolean).map(x=>({id:x.id,name:x.name})));S.saved=S.saved.slice(0,20);LS.s("lt_saved",S.saved);alert("저장했습니다.")}
+function saved(){navSet("saved");main.innerHTML=`<div class="section">찜목록</div>${S.saved.length?S.saved.map(x=>`<div class="card">${x.map(y=>esc(y.name)).join(" → ")}</div>`).join(""):'<div class="card hint">아직 없습니다.</div>'}`}
+async function saveHome(){try{const p=await new Promise((ok,no)=>navigator.geolocation.getCurrentPosition(x=>ok({x:x.coords.longitude,y:x.coords.latitude}),()=>no(Error("위치 권한 필요"))));S.home=p;LS.s("lt_home",p);admin()}catch(e){alert(e.message)}}
+function setAdmin(id,status){S.admin[id]={...(S.admin[id]||{}),status};LS.s("lt_admin",S.admin);admin()}
+function saveAdmin(id){S.admin[id]={...(S.admin[id]||{}),note:document.getElementById("note_"+id).value,hours:document.getElementById("hours_"+id).value};LS.s("lt_admin",S.admin);admin()}
+function admin(){navSet("admin");const seen=[...S.candidates,...S.near.sub,...S.near.food,...S.near.cafe];const map=new Map();seen.forEach(x=>x?.id&&!map.has(x.id)&&map.set(x.id,x));main.innerHTML=`<div class="section">관리</div><div class="card"><b>우리집</b><div class="hint">${S.home?"위치 저장됨":"미등록"}</div><button class="ghost" style="width:100%;margin-top:7px" onclick="saveHome()">📍 현재 위치를 우리집으로 저장</button></div><div class="section">최근 본 장소</div>${[...map.values()].map(x=>{const a=S.admin[x.id]||{};return `<div class="card admin"><b>${esc(x.name)}</b><div class="adminrow"><button class="rec" onclick="setAdmin('${x.id}','rec')">⭐ 추천</button><button class="not" onclick="setAdmin('${x.id}','not')">❌ 비추천</button><button onclick="setAdmin('${x.id}','')">보류</button></div><textarea id="note_${x.id}" placeholder="관리자 멘트">${esc(a.note||"")}</textarea><input class="input" id="hours_${x.id}" placeholder="운영시간/휴무 직접 확인값 예: 월 휴무, 화~일 10:00~20:00" value="${esc(a.hours||"")}"><button class="ghost" style="width:100%;margin-top:7px" onclick="saveAdmin('${x.id}')">저장</button></div>`}).join("")||'<div class="card hint">추천을 먼저 실행해 주세요.</div>'}`}
+document.querySelectorAll(".nav").forEach(n=>n.onclick=()=>n.dataset.page==="home"?home():n.dataset.page==="saved"?saved():admin());
+api("/api/app?mode=health").then(d=>{if(!d.kakao||!d.naver)err("API 키가 아직 Vercel 환경변수에 설정되지 않았습니다. KAKAO_REST_KEY, NAVER_API_KEY_ID, NAVER_API_KEY_SECRET가 필요합니다.");else home()}).catch(()=>home());
+</script></body></html>

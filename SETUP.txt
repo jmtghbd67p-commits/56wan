@@ -1,0 +1,24 @@
+아이랑 어디갈까? - 카카오 + 네이버 실데이터 버전
+
+필수 Vercel 환경변수
+1) KAKAO_REST_KEY
+   - Kakao Developers 앱의 REST API 키
+   - Kakao Local + Kakao Mobility 길찾기에 사용
+
+2) NAVER_API_KEY_ID
+3) NAVER_API_KEY_SECRET
+   - NAVER Cloud Platform > NAVER API HUB에서 발급
+   - 이미지/블로그/카페글/웹/지역 검색에 사용
+
+Vercel 설정
+Project > Settings > Environment Variables 에 위 3개를 Production에 추가한 뒤 Redeploy.
+
+데이터 역할
+- 카카오: 장소 후보, 주소/좌표, 실제 차량 예상시간, 주변 식당/카페/보조콘텐츠
+- 네이버: 별도 'NAVER 검색결과' 영역에 이미지 2개, 블로그/카페 후기 검색결과, 영업시간·휴무 관련 웹 검색결과, 예약 검색결과
+- 네이버 검색결과는 추천 순위 계산에 사용하지 않음
+- 네이버 공식 Search API는 구조화된 플레이스 영업시간/방문자 별점 데이터를 제공하지 않으므로, 운영시간은 검색결과 + 관리자 확인값으로 보강
+
+주의
+- API 키를 index.html에 직접 넣지 마세요. 반드시 Vercel Environment Variables 사용.
+- GitHub 저장소가 Public이어도 키는 노출되지 않습니다.
