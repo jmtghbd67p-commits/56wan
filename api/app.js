@@ -12,7 +12,6 @@ let runtimeCacheChecked = false;
 const CACHE_TTL = {
   localSearch: 6 * 60 * 60 * 1000,
   blogSearch: 12 * 60 * 60 * 1000,
-  reviewSearch: 24 * 60 * 60 * 1000,
   geocode: 7 * 24 * 60 * 60 * 1000,
   route: 30 * 60 * 1000,
   area: 7 * 24 * 60 * 60 * 1000
@@ -399,119 +398,6 @@ async function contentMatchedPlaces(query) {
   });
 }
 
-// 네이버 지도 방문자 리뷰를 수집하지 않고, 공개 블로그 검색 결과의 짧은 소개문만
-// 사용한다. 장소를 열었을 때의 후보 10곳에만 조회하고 하루 동안 캐시한다.
-const CHILD_REVIEW_WORDS = /아이|아기|어린이|유아|키즈|가족|체험|놀이|샌드|만들기|먹이주기|수유|유모차/;
-const NEGATIVE_REVIEW_WORDS = /불친절|최악|실망|별로|불편|불만|아쉬움|비싸(?:다|요|서)|비위생|더럽|청결.{0,5}(?:안|문제)|고장|환불|재방문.{0,8}(?:안|않)|다시는.{0,8}(?:안|않)|대기.{0,8}(?:길|불편)|주차.{0,8}(?:불편|어렵)/;
-const NEW_OPENING_WORDS = /신규\s*오픈|새로\s*오픈|오픈\s*(?:한지|한\s*지|했|한)|개점/;
-const REVIEW_WINDOW_DAYS = 30;
-
-function reviewSnippet(item) {
-  const title = stripHtml(item.title).replace(/\s+/g, " ").trim();
-  const description = stripHtml(item.description).replace(/\s+/g, " ").trim();
-  const text = (description || title).replace(/^[-·\s]+/, "").slice(0, 150);
-  return text ? { text, title: title.slice(0, 90), link: item.link || "" } : null;
-}
-
-function reviewMentionsVenue(item, name) {
-  const source = compactName(`${item.title || ""} ${item.description || ""}`);
-  const fullName = compactName(name);
-  if (fullName.length >= 4 && source.includes(fullName)) return true;
-  // 지점명·행사명을 생략한 글도 많다. 다만 '수영장', '키즈카페' 같은
-  // 일반 업종어 한 단어는 다른 장소 글을 섞으므로 고유한 긴 이름 조각만 허용한다.
-  const terms = String(name || "")
-    .replace(/[^가-힣A-Za-z0-9]+/g, " ")
-    .split(/\s+/)
-    .map(compactName)
-    .filter(term => term.length >= 3 && !/^(키즈카페|어린이|서울형|실내놀이터|수영장|박물관|미술관|과학관|체험관|공원|동물원|농장|목장|카페|리조트|호텔)$/.test(term));
-  if (terms.filter(term => term.length >= 4).some(term => source.includes(term))) return true;
-  return terms.length >= 2 && terms.filter(term => source.includes(term)).length >= 2;
-}
-
-function parseNaverPostDate(value) {
-  const match = String(value || "").match(/^(\d{4})(\d{2})(\d{2})$/);
-  if (!match) return null;
-  const date = new Date(`${match[1]}-${match[2]}-${match[3]}T00:00:00+09:00`);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function daysBetween(from, to) {
-  return Math.max(0, Math.floor((to.getTime() - from.getTime()) / 86400000));
-}
-
-function relevantReviewItems(items, name) {
-  const seen = new Set();
-  return (items || [])
-    .filter(item => reviewMentionsVenue(item, name))
-    .map(item => {
-      const snippet = reviewSnippet(item);
-      if (!snippet) return null;
-      const source = `${snippet.title} ${snippet.text}`;
-      return {
-        ...snippet,
-        post_date: item.postdate || "",
-        child_focused: CHILD_REVIEW_WORDS.test(source),
-        negative: NEGATIVE_REVIEW_WORDS.test(source),
-        opening: NEW_OPENING_WORDS.test(source)
-      };
-    })
-    .filter(Boolean)
-    .filter(item => {
-      const signature = `${item.post_date}:${item.text.replace(/\s+/g, "")}`;
-      if (seen.has(signature)) return false;
-      seen.add(signature);
-      return true;
-    });
-}
-
-async function reviewProfile(doc) {
-  const name = String(doc.place_name || doc.name || "").trim();
-  if (!name) return { excerpts: [], recent_review_count: 0, negative_review_count: 0, observed_days: REVIEW_WINDOW_DAYS, adjustment: 1, rank_score: 0 };
-  const key = `${compactName(name)}:${Number(doc.x || 0).toFixed(3)}:${Number(doc.y || 0).toFixed(3)}`;
-  return cached(`naver:review:v4:${key}`, CACHE_TTL.reviewSearch, async () => {
-    const now = new Date();
-    const cutoff = new Date(now.getTime() - REVIEW_WINDOW_DAYS * 86400000);
-    // 화면의 후기 발췌에는 기간을 걸지 않는다. 아이 동반 검색 결과가 없을 때만
-    // 일반 방문 후기로 넓혀, 실제 장소 후기 없이 빈 카드가 되는 일을 줄인다.
-    const childData = await naver("/search/v1/blog", { query: `${name} 아이 동반 후기`, display: "100", sort: "date" });
-    let allReviews = relevantReviewItems(childData.items, name);
-    if (!allReviews.length) {
-      const broadData = await naver("/search/v1/blog", { query: `${name} 후기`, display: "100", sort: "date" });
-      allReviews = relevantReviewItems(broadData.items, name);
-    }
-
-    // 최근 30일 조건은 순위 계산에만 사용한다. 화면에는 과거의 실제 방문 후기도 보인다.
-    const reviews = allReviews.filter(item => {
-      const postDate = parseNaverPostDate(item.post_date);
-      return postDate && postDate >= cutoff && postDate <= now;
-    });
-
-    // 최근 글에 '신규 오픈'이 명시된 경우만, 그 글의 날짜부터 경과일을 계산한다.
-    // 단순히 최근 후기의 첫 날짜를 개점일로 보는 보정은 오래된 장소를 과대평가하므로 하지 않는다.
-    const openingDates = reviews.filter(item => item.opening).map(item => parseNaverPostDate(item.post_date)).filter(Boolean);
-    const observedDays = openingDates.length ? Math.min(REVIEW_WINDOW_DAYS, Math.max(1, daysBetween(new Date(Math.min(...openingDates.map(date => date.getTime()))), now) + 1)) : REVIEW_WINDOW_DAYS;
-    const adjustment = REVIEW_WINDOW_DAYS / observedDays;
-    const negativeCount = reviews.filter(item => item.negative).length;
-    const effectiveReviewCount = reviews.length * adjustment;
-    const effectiveNegativeCount = negativeCount * adjustment;
-    return {
-      excerpts: allReviews
-        .sort((a, b) => (b.child_focused - a.child_focused) || String(b.post_date).localeCompare(String(a.post_date)))
-        .slice(0, 3)
-        .map(({ negative, opening, child_focused, post_date, ...item }) => item),
-      recent_review_count: reviews.length,
-      negative_review_count: negativeCount,
-      observed_days: observedDays,
-      adjustment: Number(adjustment.toFixed(2)),
-      rank_score: Number((effectiveReviewCount - effectiveNegativeCount * 2).toFixed(2))
-    };
-  });
-}
-
-async function reviewSummaries(doc) {
-  return (await reviewProfile(doc)).excerpts;
-}
-
 function isResearchVenue(doc) {
   const name = String(doc.place_name || doc.name || "");
   return /연구소|연구원|연구센터|시험장/.test(name);
@@ -522,43 +408,6 @@ function hasDirectChildActivity(doc) {
   // 연구기관의 업종이 단순히 '박물관'으로 표시되는 일은 흔하다. 어린이·체험
   // 근거가 있는 경우만 바로 통과시키고, 나머지는 블로그 근거를 별도로 확인한다.
   return /어린이|유아|키즈|놀이|샌드|체험관|과학관|몰입형|인터랙티브/.test(text);
-}
-
-async function mapWithConcurrency(items, limit, mapper) {
-  const result = new Array(items.length);
-  let cursor = 0;
-  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (cursor < items.length) {
-      const index = cursor++;
-      result[index] = await mapper(items[index], index);
-    }
-  });
-  await Promise.all(workers);
-  return result;
-}
-
-async function addResearchEvidence(queryResults, definition) {
-  if (definition !== THEME.experience) return;
-  const candidates = [];
-  const seen = new Set();
-  for (const { docs } of queryResults) {
-    for (const doc of docs) {
-      if (!isResearchVenue(doc) || hasDirectChildActivity(doc) || seen.has(doc.id)) continue;
-      seen.add(doc.id);
-      candidates.push(doc);
-    }
-  }
-  // 연구기관은 일반 후보보다 우선 검증 비용을 더 들인다. 상위 6곳까지만 확인한다.
-  await mapWithConcurrency(candidates.slice(0, 6), 2, async doc => {
-    try {
-      const excerpts = await reviewSummaries(doc);
-      doc.review_excerpts = excerpts;
-      doc.child_evidence = excerpts.some(item => CHILD_REVIEW_WORDS.test(`${item.title} ${item.text}`));
-    } catch (error) {
-      console.warn("[research child evidence failed]", doc.place_name, error.message || String(error));
-      doc.child_evidence = false;
-    }
-  });
 }
 
 async function routes(origin, docs, limit = 24) {
@@ -651,7 +500,6 @@ async function searchTheme(key, origin, maxMinutes, originLabel = "", options = 
     }) : Promise.resolve([])
   ]);
   if (contentDocs.length) queryResults.push({ query: definition.contentQuery, docs: contentDocs });
-  await addResearchEvidence(queryResults, definition);
   const byId = new Map();
   for (const { query, docs } of queryResults) {
     for (const doc of docs) {
@@ -677,7 +525,7 @@ async function searchTheme(key, origin, maxMinutes, originLabel = "", options = 
       route_estimated: !!doc.route_estimated,
       family_evidence: doc.hits || 1
     }))
-    // 이동시간은 통과 여부만 판단한다. 최종 순서는 최근 후기 품질 점수로 정한다.
+    // 이동시간은 통과 여부만 판단한다. 최종 순서는 테마 검색 근거와 이동시간으로 정한다.
     .sort((a, b) => (b.family_evidence - a.family_evidence) || (a.route_minutes - b.route_minutes))
     .slice(0, candidateLimit);
   console.log("[theme search]", JSON.stringify({ theme: key, candidates: candidates.length, items: items.length }));
@@ -700,7 +548,7 @@ async function searchThemes(keys, origin, maxMinutes, originLabel = "", options 
   const selected = uniqueStrings(keys).filter(key => THEME[key]);
   if (!selected.length) return [];
   // 여러 테마를 동시에 고를 때도 외부 검색 호출이 과도하게 늘지 않도록
-  // 후기 평가 대상은 전체 16곳 안에서 나눠 갖는다. 결과 목록은 최대 10곳이다.
+  // 테마별 후보 수를 나눠 갖는다. 결과 목록은 최대 10곳이다.
   const candidateLimit = selected.length === 1 ? 12 : Math.max(3, Math.ceil(16 / selected.length));
   const groups = await Promise.all(selected.map(key => searchTheme(key, origin, maxMinutes, originLabel, {
     ...options,
@@ -787,4 +635,4 @@ module.exports = async function handler(req, res) {
 };
 
 // 배포 전 후보 판정 회귀 검증에만 사용한다. HTTP 응답에는 노출되지 않는다.
-module.exports.__test = { suitable, THEME, seasonQueries, isResearchVenue, hasDirectChildActivity, compareCandidateQuality, reviewMentionsVenue, relevantReviewItems };
+module.exports.__test = { suitable, THEME, seasonQueries, isResearchVenue, hasDirectChildActivity, compareCandidateQuality };
