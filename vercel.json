@@ -1,0 +1,8 @@
+{
+  "functions": {
+    "api/app.js": {
+      "regions": ["icn1"],
+      "maxDuration": 30
+    }
+  }
+}
