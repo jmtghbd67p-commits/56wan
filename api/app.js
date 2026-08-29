@@ -118,8 +118,8 @@ const THEME = {
   season: {
     title: "시즌 한정",
     description: "물놀이 · 눈놀이 · 계절 나들이",
-    queries: ["어린이 물놀이장", "계곡 물놀이", "야외수영장", "워터파크"],
-    include: ["물놀이", "계곡", "수영장", "워터", "분수", "눈썰매", "스케이트", "빙상"]
+    queries: ["어린이 물놀이장", "계곡 물놀이", "어린이 야외수영장", "워터파크"],
+    include: ["물놀이", "계곡", "워터", "분수", "눈썰매", "스케이트", "빙상"]
   }
 };
 
@@ -456,16 +456,8 @@ function suitable(doc, definition, query = "") {
   if (foodOrStay) return false;
   if (definition.exclude?.some(word => text.includes(word))) return false;
 
-  if (definition === THEME.craft) {
-    const activityInPlace = /공방|도예|도자기|베이킹|쿠킹|만들기|공예|피자\s*체험|농장\s*체험|수확\s*체험|요리\s*(?:체험|교육|교실|수업|클래스)|미술\s*(?:체험|교육|교실|수업|클래스)/.test(text);
-    const safeActivityCategory = /공방|도자기|체험|테마파크|농장|농원|목장|요리교육|미술교육|공예|문화센터|키즈카페|실내놀이터/.test(category);
-    const educationWithoutActivity = /학원|교습시설/.test(category) && !activityInPlace;
-    if (educationWithoutActivity) return false;
-
-    // 직접 검색 결과는 장소 자체에 활동 근거가 있어야 하며,
-    // 블로그 보완 결과도 체험·농장 등 안전한 업종일 때만 허용한다.
-    return activityInPlace || (!!doc.content_evidence && safeActivityCategory);
-  }
+  if (definition === THEME.craft) return isChildCraftVenue(doc);
+  if (definition === THEME.season) return isSeasonPlayVenue(doc);
 
   if (!definition.include.some(word => text.includes(word))) return false;
   // '연구소'라는 이유만으로 제외하지는 않는다. 다만 어린이 활동 근거가 없는
@@ -475,9 +467,37 @@ function suitable(doc, definition, query = "") {
   return true;
 }
 
+// '요리교육'이라는 업종명만으로는 아이와 할 수 있는 체험이라고 판단할 수 없다.
+// 학원·교습시설은 반드시 어린이/유아/키즈/가족 대상 근거가 있어야 한다.
+function isChildCraftVenue(doc) {
+  const name = String(doc.place_name || "");
+  const category = String(doc.category_name || "");
+  const text = `${name} ${category} ${doc.description || ""}`;
+  const childAudience = /어린이|유아|키즈|아동|영유아|주니어|초등|가족/.test(text);
+  const handsOn = /공방|도예|도자기|베이킹|쿠킹|만들기|공예|피자\s*체험|농장\s*체험|수확\s*체험|요리\s*(?:체험|교육|교실|수업|클래스)|미술\s*(?:체험|교육|교실|수업|클래스)/.test(text);
+  const verifiedVenue = /체험농장|생태나라|치즈마을|체험마을|테마파크|농장|농원|목장|공방|도예원|베이킹스튜디오|쿠킹스튜디오/.test(`${name} ${category}`);
+  const educationVenue = /학원|교습시설|교육원|교육센터|요리교육|미술교육/.test(category);
+  if (!handsOn) return false;
+  if (educationVenue) return childAudience;
+  return childAudience || verifiedVenue || !!doc.content_evidence;
+}
+
+// 여름 '물놀이'는 운동 목적의 일반 수영장과 구분한다.
+// 아이 물놀이 시설을 뜻하는 단서가 없거나, 휘트니스·강습 시설이면 제외한다.
+function isSeasonPlayVenue(doc, month = new Date().getMonth() + 1) {
+  const text = `${doc.place_name || ""} ${doc.category_name || ""} ${doc.description || ""}`;
+  if (month >= 6 && month <= 9) {
+    const ordinaryPool = /휘트니스|피트니스|헬스|스포츠센터|수영강습|수영교실|실내수영장|사우나|호텔/.test(text);
+    const waterPlay = /어린이|유아|키즈|물놀이|워터파크|분수|계곡|야외수영장|물놀이터|수변놀이터/.test(text);
+    return !ordinaryPool && waterPlay;
+  }
+  if (month === 12 || month <= 2) return /어린이|유아|키즈|눈썰매|눈놀이|빙상|스케이트/.test(text);
+  return /어린이|유아|키즈|계절\s*체험|야외\s*나들이|가족\s*생태/.test(text);
+}
+
 function seasonQueries(visitDate) {
   const month = Number(String(visitDate || "").slice(5, 7)) || new Date().getMonth() + 1;
-  if (month >= 6 && month <= 9) return ["어린이 물놀이장", "계곡 물놀이", "야외수영장", "분수 물놀이장", "워터파크"];
+  if (month >= 6 && month <= 9) return ["어린이 물놀이장", "계곡 물놀이", "어린이 야외수영장", "분수 물놀이장", "워터파크"];
   if (month === 12 || month <= 2) return ["어린이 눈썰매장", "빙상장", "스케이트장", "눈놀이장"];
   return ["어린이 계절 체험", "어린이 야외 나들이", "가족 생태 체험"];
 }
@@ -517,6 +537,7 @@ async function searchTheme(key, origin, maxMinutes, originLabel = "", options = 
     .slice(0, options.preview ? 12 : 24);
   const routed = await routes(origin, candidates, options.preview ? 12 : 24);
   const candidateLimit = options.candidateLimit || (options.preview ? 6 : 12);
+  const excludedIds = new Set((options.excludeIds || []).map(String));
   const items = routed
     .filter(doc => doc.route_minutes <= maxMinutes)
     .map(doc => normalized(doc, {
@@ -527,6 +548,7 @@ async function searchTheme(key, origin, maxMinutes, originLabel = "", options = 
     }))
     // 이동시간은 통과 여부만 판단한다. 최종 순서는 테마 검색 근거와 이동시간으로 정한다.
     .sort((a, b) => (b.family_evidence - a.family_evidence) || (a.route_minutes - b.route_minutes))
+    .filter(item => !excludedIds.has(String(item.id)))
     .slice(0, candidateLimit);
   console.log("[theme search]", JSON.stringify({ theme: key, candidates: candidates.length, items: items.length }));
   // 블로그 검색 결과는 장소 ID에 묶인 후기가 아니라 키워드 결과다.
@@ -567,26 +589,91 @@ async function searchThemes(keys, origin, maxMinutes, originLabel = "", options 
   return [...byVenue.values()].sort(compareCandidateQuality).slice(0, 10);
 }
 
+const FOOD_OR_CAFE_CATEGORY = /음식점|카페|커피|제과|디저트|베이커리|주점|술집|호프|한식|중식|일식|양식|분식|치킨|피자|패스트푸드|뷔페/;
+const SUB_CONTENT_WORDS = /놀이터|어린이공원|공원|도서관|박물관|과학관|미술관|전시|체험|공방|문화관|기념관|궁궐|고궁|성곽|동물|수족관|아쿠아리움|식물원|수목원|정원|숲|휴양림|모터스튜디오/;
+
+function nearbyText(doc) {
+  return `${doc.place_name || ""} ${doc.category_name || ""} ${doc.description || ""}`;
+}
+
+function isSuitableNearby(doc, type) {
+  const category = String(doc.category_name || "");
+  const text = nearbyText(doc);
+  if (type === "sub") {
+    // '체험관' 검색에서 음식점이 함께 잡히는 경우가 있어 업종을 먼저 확실히 뺀다.
+    return !FOOD_OR_CAFE_CATEGORY.test(category) && SUB_CONTENT_WORDS.test(text);
+  }
+  // 노키즈존이라고 명시된 경우만 제외한다. 아이 동반 시설 여부는 맛집·카페
+  // 후보를 좁히는 기준으로 쓰지 않는다.
+  if (/노\s*키즈\s*존|노키즈/.test(text)) return false;
+  if (type === "food") return /음식점|한식|중식|일식|양식|분식|치킨|피자|패스트푸드|뷔페/.test(category);
+  if (type === "cafe") return /카페|커피|제과|디저트|베이커리/.test(category);
+  return false;
+}
+
+function nearbySummary(doc, type) {
+  const text = nearbyText(doc);
+  if (type === "food") return "메인 일정 전후에 들르기 좋은 식사 후보";
+  if (type === "cafe") return "잠깐 쉬거나 간식을 먹기 좋은 카페 후보";
+  if (/놀이터|어린이공원|모래/.test(text)) return "아이와 잠깐 뛰어놀기 좋은 야외 코스";
+  if (/도서관|그림책/.test(text)) return "조용히 쉬며 책을 볼 수 있는 코스";
+  if (/공방|도예|만들기|체험/.test(text)) return "만들기·체험을 더할 수 있는 코스";
+  if (/박물관|과학관|미술관|전시|모터스튜디오|문화관|기념관/.test(text)) return "메인 전후로 들르기 좋은 전시·문화 코스";
+  if (/궁궐|고궁|성곽/.test(text)) return "메인 전후로 들르기 좋은 역사 산책 코스";
+  if (/동물|수족관|아쿠아리움/.test(text)) return "동물을 보고 관찰할 수 있는 코스";
+  if (/수목원|식물원|정원|숲|휴양림|공원/.test(text)) return "가볍게 걷고 쉬기 좋은 자연 코스";
+  return "메인 일정 사이에 들르기 좋은 보조 코스";
+}
+
 async function searchNearby(origin, type, originLabel = "") {
-  const terms = type === "food" ? ["가족 식당", "맛집", "한식"]
+  // 식당·카페는 아이 친화 시설을 찾는 것이 아니라, 메인 근처의 인기 있는
+  // 식당·카페를 찾는다. localSearch()는 네이버 지역검색의 comment(리뷰순) 정렬을 쓴다.
+  const terms = type === "food" ? ["맛집", "한식 맛집", "양식 맛집"]
     : type === "cafe" ? ["카페", "베이커리 카페"]
       : ["어린이 놀이터", "공원", "도서관", "체험관", "박물관"];
   const hint = areaHints(originLabel)[0];
   const queries = uniqueStrings(terms.map(term => hint ? `${hint} ${term}` : term));
-  const docs = (await Promise.all(queries.map(query => localSearch(query).catch(error => {
+  const groups = await Promise.all(queries.map(query => localSearch(query).catch(error => {
     console.warn("[naver nearby failed]", type, query, error.message || String(error));
     return [];
-  })))).flat();
-  const candidates = uniqueVenues(docs)
+  })));
+  // 여러 네이버 리뷰순 검색에서 반복 등장하고 각 검색에서 상위에 있던 장소를
+  // 우선한다. 과거에는 여기서 거리순으로 다시 정렬해 '맛집' 순위가 사라졌다.
+  const byVenue = new Map();
+  for (const group of groups) {
+    group.forEach((doc, index) => {
+      const key = venueKey(doc);
+      const score = Math.max(1, group.length - index);
+      const previous = byVenue.get(key);
+      if (!previous) {
+        byVenue.set(key, { ...doc, nearby_popularity: score, nearby_best_rank: index });
+        return;
+      }
+      previous.nearby_popularity += score;
+      if (index < previous.nearby_best_rank) {
+        Object.assign(previous, doc, {
+          nearby_popularity: previous.nearby_popularity,
+          nearby_best_rank: index
+        });
+      }
+    });
+  }
+  const candidates = [...byVenue.values()]
+    .filter(doc => isSuitableNearby(doc, type))
     .filter(doc => haversine(origin, doc) <= 25)
-    .sort((a, b) => haversine(origin, a) - haversine(origin, b))
+    .sort((a, b) => (b.nearby_popularity - a.nearby_popularity)
+      || (a.nearby_best_rank - b.nearby_best_rank)
+      || (haversine(origin, a) - haversine(origin, b)))
     .slice(0, 20);
   const routed = await routes(origin, candidates);
   return routed.map(doc => normalized(doc, {
     route_minutes: doc.route_minutes,
     route_distance: doc.route_distance,
-    route_estimated: !!doc.route_estimated
-  })).sort((a, b) => a.route_minutes - b.route_minutes).slice(0, 8);
+    route_estimated: !!doc.route_estimated,
+    nearby_summary: nearbySummary(doc, type),
+    nearby_popularity: doc.nearby_popularity
+  })).sort((a, b) => (b.nearby_popularity - a.nearby_popularity)
+    || (a.route_minutes - b.route_minutes)).slice(0, 8);
 }
 
 module.exports = async function handler(req, res) {
@@ -618,10 +705,11 @@ module.exports = async function handler(req, res) {
     }
     if (mode === "theme") {
       const selectedThemes = uniqueStrings(String(value("themes") || value("theme") || "experience").split(","));
+      const excludeIds = uniqueStrings(String(value("exclude") || "").split(",")).slice(0, 60);
       return send(res, 200, {
         ok: true,
         transitEnabled: false,
-        items: await searchThemes(selectedThemes, origin, maxMinutes, originLabel, { visitDate: value("visitDate") })
+        items: await searchThemes(selectedThemes, origin, maxMinutes, originLabel, { visitDate: value("visitDate"), excludeIds })
       }, policy);
     }
     if (mode === "nearby") {
@@ -635,4 +723,4 @@ module.exports = async function handler(req, res) {
 };
 
 // 배포 전 후보 판정 회귀 검증에만 사용한다. HTTP 응답에는 노출되지 않는다.
-module.exports.__test = { suitable, THEME, seasonQueries, isResearchVenue, hasDirectChildActivity, compareCandidateQuality };
+module.exports.__test = { suitable, THEME, seasonQueries, isResearchVenue, hasDirectChildActivity, isChildCraftVenue, isSeasonPlayVenue, compareCandidateQuality, isSuitableNearby, nearbySummary };
