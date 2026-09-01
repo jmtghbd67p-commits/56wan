@@ -1,4 +1,4 @@
-아이랑 어디갈까? - 네이버 검색 + 카카오 길찾기·지도 버전
+오육완 - 네이버 검색 + 카카오 길찾기·지도 버전
 
 필수 Vercel 환경변수
 1) KAKAO_REST_KEY
@@ -10,13 +10,19 @@
    - NAVER Cloud Platform > NAVER API HUB에서 발급
    - 이미지/블로그/카페글/웹/지역 검색에 사용
 
+4) CULTURE_DATA_SERVICE_KEY
+   - 공공데이터포털 > 한국문화정보원 문화시설 조회서비스의 일반 인증키
+   - 같은 키로 '한눈에보는문화정보 조회서비스'도 활용신청해야 현재 전시·교육·체험 제목을 받을 수 있음
+   - 박물관·미술관·도서관은 장소만 추천하지 않고, 진행 중 프로그램 제목이 확인될 때만 전시탐험 후보로 보강
+
 Vercel 설정
-Project > Settings > Environment Variables 에 위 3개를 Production에 추가한 뒤 Redeploy.
+Project > Settings > Environment Variables 에 위 4개를 Production에 추가한 뒤 Redeploy.
 
 데이터 역할
 - 네이버 지역·블로그 검색: 장소 후보 수집과 아이 동반·체험 근거 확인
 - 카카오 Mobility: 네이버에서 찾은 장소까지의 실제 차량 소요시간 측정
 - 카카오 지도 JavaScript SDK: 출발지 지도 선택 화면의 한글 지도 표시
+- 문화포털/공공데이터: 현재 진행 중인 전시·교육·체험 제목과 문화시설 보강
 
 주의
 - REST API 키와 네이버 API 키는 Vercel Environment Variables에만 저장합니다.
