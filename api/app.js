@@ -2,9 +2,31 @@ const KAKAO = process.env.KAKAO_REST_KEY;
 const NAVER_ID = process.env.NAVER_API_KEY_ID;
 const NAVER_SECRET = process.env.NAVER_API_KEY_SECRET;
 const SIGUNGU_GRAPH = require("./sigungu-graph");
+const VISIT_COUNTER_KEY = "56wan-visits-20260901-d31b";
+
+async function incrementVisitCounter() {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+  try {
+    const response = await fetch(`https://countapi.mileshilliard.com/api/v1/hit/${VISIT_COUNTER_KEY}`, {
+      signal: controller.signal,
+      headers: { Accept: "application/json" }
+    });
+    const data = await response.json().catch(() => ({}));
+    const count = Number(data?.value);
+    if (!response.ok || !Number.isFinite(count)) throw new Error(data?.message || `Visit counter ${response.status}`);
+    return Math.max(0, Math.floor(count));
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 // 공공데이터포털의 "한눈에보는문화정보"와 "문화시설" 서비스가 같은
 // 인증키를 사용한다. 키는 브라우저·GitHub에 절대 노출하지 않고 Vercel에만 둔다.
 const CULTURE_DATA_SERVICE_KEY = process.env.CULTURE_DATA_SERVICE_KEY;
+// 문화포털이 현재 안내하는 B553457 경로가 실제 요청에서는
+// NO_OPENAPI_SERVICE_ERROR(폐기된 서비스)를 반환한다. 기본 검색을 늦추거나
+// 경고를 반복하지 않도록 명시적으로 재활성화하기 전까지 선택 보강 기능만 끈다.
+const CULTURE_DATA_API_ENABLED = process.env.CULTURE_DATA_API_ENABLED === "true";
 const NAVER_BASE = "https://naverapihub.apigw.ntruss.com";
 const CULTURE_BASE = "https://apis.data.go.kr/B553457/nopenapi/rest";
 
@@ -1062,7 +1084,7 @@ async function emartOneDayClasses(branch, visitDate) {
 // 지점 선택 UI는 새 신세계 사이트에, 강좌 목록은 아카데미 프레임에 분리돼 있어
 // 지점 코드와 강좌 코드가 서로 다르다. 아래 코드는 아카데미 프레임에서 실제로
 // 내려오는 storeCode를 사용한다. 광주점은 장기 휴관으로 현재 목록에 없다.
-const SHINSEGAE_LECTURE_LIST_URL = "https://sacademy.shinsegae.com/sdotcom/web/HP0010P0/getLectList.do";
+const SHINSEGAE_LECTURE_LIST_URL = "https://sacademy.shinsegae.com/sdotcom/web/hp0010p0/getLectList.do";
 const SHINSEGAE_BRANCHES = [
   ["01", "본점"], ["03", "타임스퀘어"], ["14", "강남점"], ["15", "마산점"],
   ["16", "신세계 사우스시티"], ["18", "센텀시티"], ["19", "의정부점"],
@@ -1070,6 +1092,15 @@ const SHINSEGAE_BRANCHES = [
   ["90", "대구신세계"], ["D1", "대전신세계 Art & Science"]
 ].map(([code, name]) => ({ code, name }));
 const SHINSEGAE_SEMESTERS = ["S1", "S2", "S3", "S4"];
+
+function shinsegaeSemesterForDate(visitDate) {
+  const digits = String(visitDate || "").replace(/\D/g, "");
+  const month = Number(digits.slice(4, 6));
+  if (month >= 3 && month <= 5) return "S1";
+  if (month >= 6 && month <= 8) return "S2";
+  if (month >= 9 && month <= 11) return "S3";
+  return "S4";
+}
 
 function shinsegaePeriodIncludes(period, visitDate) {
   const dates = String(period || "").match(/20\d{2}[.\-/]\d{1,2}[.\-/]\d{1,2}/g) || [];
@@ -1100,7 +1131,11 @@ async function shinsegaeSemesterClasses(branch, semester) {
     const first = await requestPage(1);
     const rows = Array.isArray(first?.lectList) ? first.lectList : [];
     const total = Number(first?.param?.totalCount || first?.totalCount || rows.length);
-    const pages = Math.min(5, Math.ceil(total / 100));
+    // 신세계 응답은 요청의 pageSize=100을 무시하고 실제로는 10건씩 보낸다.
+    // 고정 100으로 나누면 272건 중 앞 30건만 읽어 어린이 원데이 강좌가
+    // 뒤쪽 페이지에 있을 때 전부 누락된다.
+    const actualPageSize = Math.max(1, Number(first?.param?.pageSize) || rows.length || 10);
+    const pages = Math.min(40, Math.ceil(total / actualPageSize));
     if (pages > 1) {
       const rest = await Promise.all(Array.from({ length: pages - 1 }, (_, index) => requestPage(index + 2)));
       rest.forEach(page => rows.push(...(Array.isArray(page?.lectList) ? page.lectList : [])));
@@ -1110,7 +1145,8 @@ async function shinsegaeSemesterClasses(branch, semester) {
 }
 
 async function shinsegaeOneDayClasses(branch, visitDate) {
-  const semesters = await Promise.all(SHINSEGAE_SEMESTERS.map(semester => shinsegaeSemesterClasses(branch, semester).catch(error => {
+  // 날짜에 맞는 학기만 조회해 모든 페이지를 읽어도 요청량이 폭증하지 않게 한다.
+  const semesters = await Promise.all([shinsegaeSemesterForDate(visitDate)].map(semester => shinsegaeSemesterClasses(branch, semester).catch(error => {
     console.warn("[shinsegae semester lookup failed]", branch.name, semester, error.message || String(error));
     return [];
   })));
@@ -1222,6 +1258,32 @@ function lotteMartSeason(year, month) {
 function currencyLabel(value) {
   const amount = Number(String(value || "").replace(/[^0-9]/g, ""));
   return Number.isFinite(amount) && amount > 0 ? `${amount.toLocaleString("ko-KR")}원` : "";
+}
+
+// 문화센터마다 연령 조건을 제목, 대상, 별도 필드 중 서로 다른 곳에 넣는다.
+// 날짜·가격처럼 보이는 숫자를 잘못 표시하지 않도록 '개월' 또는 '세' 단위가
+// 명시된 값만 골라 카드에 전달한다.
+function cultureAgeLabel(...values) {
+  const text = values.filter(Boolean).map(value => stripHtml(String(value))).join(" ").replace(/\s+/g, " ");
+  const patterns = [
+    /(?:20)?\d{2}\s*[~∼\-–]\s*(?:20)?\d{2}\s*년생/i,
+    /(?:만\s*)?\d{1,3}\s*개월\s*(?:[~∼\-–]\s*(?:만\s*)?\d{1,3}\s*개월|이상|이하|미만|부터)/i,
+    /(?:만\s*)?\d{1,3}\s*[~∼\-–]\s*(?:만\s*)?\d{1,3}\s*개월/i,
+    /(?:만\s*)?\d{1,3}\s*개월/i,
+    /(?:만\s*)?\d{1,2}\s*세\s*(?:[~∼\-–]\s*(?:만\s*)?\d{1,2}\s*세|이상|이하|미만|부터)/i,
+    /(?:만\s*)?\d{1,2}\s*[~∼\-–]\s*(?:만\s*)?\d{1,2}\s*세/i,
+    /(?:만\s*)?\d{1,2}\s*세/i
+  ];
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[0]) return match[0]
+      .replace(/[∼\-–]/g, "~")
+      .replace(/\s+/g, " ")
+      .replace(/\s*(개월|세)\s*/g, "$1 ")
+      .replace(/\s*~\s*/g, "~")
+      .trim();
+  }
+  return "";
 }
 
 async function lotteMartOneDayClasses(branch, visitDate) {
@@ -1450,7 +1512,7 @@ async function searchCultureCenterTheme(origin, maxMinutes, originLabel = "", op
   const visitDate = String(options.visitDate || "").replace(/\D/g, "");
   if (!/^\d{8}$/.test(visitDate)) throw new Error("문화센터 테마는 놀이 날짜를 선택해 주세요.");
   // 입점 매장을 쇼핑몰로 오인하던 이전 결과 캐시를 재사용하지 않는다.
-  const cacheKey = `culture-center:classes:v14:${visitDate}:${pointKey(origin, 2)}:${maxMinutes <= 40 ? 40 : 75}`;
+  const cacheKey = `culture-center:classes:v17:${visitDate}:${pointKey(origin, 2)}:${maxMinutes <= 40 ? 40 : 75}`;
   const allItems = await cached(cacheKey, CACHE_TTL.cultureCenterClasses, async () => {
     const mallQueries = cultureMallQueries(originLabel, options.rangeAreas);
     // 카카오 지도 검색은 모든 생활권 후보를 확인하고, 네이버 검색은 앞쪽 우선
@@ -1534,6 +1596,7 @@ async function searchCultureCenterTheme(origin, maxMinutes, originLabel = "", op
       culture_date_label: dateLabel,
       culture_time: course.time,
       culture_target: course.target,
+      culture_age: cultureAgeLabel(course.age, course.target, course.title),
       culture_price: course.price,
       culture_status: course.status,
       culture_source: course.sourceName,
@@ -1542,7 +1605,17 @@ async function searchCultureCenterTheme(origin, maxMinutes, originLabel = "", op
       matched_themes: ["culture"]
     }));
     const byCourse = new Map();
-    for (const item of items) if (!byCourse.has(item.id)) byCourse.set(item.id, item);
+    for (const item of items) {
+      // 같은 지점·같은 시간에 제목만 띄어쓰기나 ‘작품/소품’처럼 조금 다르게
+      // 반복되는 강좌는 한 번만 보여 준다.
+      const titleKey = String(item.name || "").toLowerCase()
+        .replace(/\[[^\]]*\]|\([^)]*\)/g, " ")
+        .replace(/체험|만들기|클래스|작품|소품|현장접수|로비/g, "")
+        .replace(/[^a-z0-9가-힣]/g, "");
+      const timeKey = String(item.culture_time || "").match(/\d{1,2}:\d{2}/)?.[0] || "시간미정";
+      const courseKey = `${compactCultureName(item.mall_name)}:${timeKey}:${titleKey || item.id}`;
+      if (!byCourse.has(courseKey)) byCourse.set(courseKey, item);
+    }
     const ordered = [...byCourse.values()].sort((a, b) => (a.route_minutes - b.route_minutes)
       || String(a.culture_time).localeCompare(String(b.culture_time), "ko")
       || String(a.name).localeCompare(String(b.name), "ko"));
@@ -1626,7 +1699,7 @@ function programPeriod(program) {
 }
 
 async function culturalProgramsNear(origin, maxMinutes) {
-  if (!CULTURE_DATA_SERVICE_KEY) return [];
+  if (!CULTURE_DATA_API_ENABLED || !CULTURE_DATA_SERVICE_KEY) return [];
   const date = todayCultureDate();
   const range = maxMinutes <= 40 ? 0.55 : 1.05;
   // v2: 과거에는 API 승인 전의 빈 결과까지 6시간 캐시돼, 인증키를 바로잡아도
@@ -1684,7 +1757,7 @@ function culturalFacilityDoc(record) {
 // 문화정보 API가 알려 준 '행사 장소'를 네이버가 찾지 못할 때만 박물관·미술관·도서관
 // 시설 목록에서 좌표·주소를 보강하는 안전망으로 사용한다.
 async function culturalFacilityFallback(venueName) {
-  if (!CULTURE_DATA_SERVICE_KEY) return null;
+  if (!CULTURE_DATA_API_ENABLED || !CULTURE_DATA_SERVICE_KEY) return null;
   const entries = await cached("culture:spaces:all", CACHE_TTL.culturalSpaces, async () => {
     const paths = ["/cultureartspaces/museum", "/cultureartspaces/library", "/cultureartspaces/hall"];
     const groups = await Promise.all(paths.map(path => culture(path, { cPage: "1", rows: "200" }).catch(error => {
@@ -1967,9 +2040,9 @@ function compareCandidateQuality(a, b) {
     || (a.route_minutes || 9999) - (b.route_minutes || 9999);
 }
 
-async function searchThemes(keys, origin, maxMinutes, originLabel = "", options = {}) {
+async function searchThemesResult(keys, origin, maxMinutes, originLabel = "", options = {}) {
   const selected = uniqueStrings(keys).filter(key => THEME[key]);
-  if (!selected.length) return [];
+  if (!selected.length) return { items: [], hasMore: false };
   // 여러 테마를 동시에 고를 때도 외부 검색 호출이 과도하게 늘지 않도록
   // 테마별 후보 수를 나눠 갖는다. 결과 목록은 최대 10곳이다.
   const candidateLimit = selected.length === 1 ? 12 : Math.max(3, Math.ceil(16 / selected.length));
@@ -1991,7 +2064,12 @@ async function searchThemes(keys, origin, maxMinutes, originLabel = "", options 
       previous.matched_themes = uniqueStrings([...(previous.matched_themes || []), ...(item.matched_themes || [])]);
     }
   }
-  return [...byVenue.values()].sort(compareCandidateQuality).slice(0, 10);
+  const available = [...byVenue.values()].sort(compareCandidateQuality);
+  return { items: available.slice(0, 10), hasMore: available.length > 10 };
+}
+
+async function searchThemes(keys, origin, maxMinutes, originLabel = "", options = {}) {
+  return (await searchThemesResult(keys, origin, maxMinutes, originLabel, options)).items;
 }
 
 const FOOD_OR_CAFE_CATEGORY = /음식점|카페|커피|제과|디저트|베이커리|주점|술집|호프|한식|중식|일식|양식|분식|치킨|피자|패스트푸드|뷔페/;
@@ -2120,7 +2198,15 @@ module.exports = async function handler(req, res) {
     const url = new URL(req.url, "http://local");
     const mode = req.query?.mode || url.searchParams.get("mode");
     const policy = req.method === "GET" ? cachePolicy(mode) : null;
-    if (mode === "health") return send(res, 200, { ok: true, naver: !!(NAVER_ID && NAVER_SECRET), kakao: !!KAKAO, culture: !!CULTURE_DATA_SERVICE_KEY });
+    if (mode === "visit-count") return send(res, 200, { ok: true, count: await incrementVisitCounter() });
+    if (mode === "health") return send(res, 200, {
+      ok: true,
+      naver: !!(NAVER_ID && NAVER_SECRET),
+      kakao: !!KAKAO,
+      culture: !!(CULTURE_DATA_API_ENABLED && CULTURE_DATA_SERVICE_KEY),
+      cultureConfigured: !!CULTURE_DATA_SERVICE_KEY,
+      cultureCenters: true
+    });
     if (mode === "geocode") {
       const query = req.query?.q || url.searchParams.get("q") || "";
       return send(res, 200, { ok: true, origin: await geocode(query) }, policy);
@@ -2169,10 +2255,12 @@ module.exports = async function handler(req, res) {
     if (mode === "theme") {
       const selectedThemes = uniqueStrings(String(value("themes") || value("theme") || "experience").split(","));
       const excludeIds = uniqueStrings(String(value("exclude") || "").split(",")).slice(0, 60);
+      const result = await searchThemesResult(selectedThemes, origin, maxMinutes, originLabel, { visitDate: value("visitDate"), excludeIds, searchHints, rangeAreas });
       return send(res, 200, {
         ok: true,
         transitEnabled: false,
-        items: await searchThemes(selectedThemes, origin, maxMinutes, originLabel, { visitDate: value("visitDate"), excludeIds, searchHints, rangeAreas })
+        items: result.items,
+        hasMore: result.hasMore
       }, policy);
     }
     if (mode === "nearby") {
