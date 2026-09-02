@@ -84,12 +84,44 @@ home=()=>{
 };
 
 function openNavigationMap(){
-  // 과거 Leaflet 지도 호출이 남아 있더라도, 어떤 진입점에서도 이전 지도가
-  // 노출되지 않도록 카카오 지도 화면으로 연결한다.
+  // 정상 상태에서는 카카오 한글 지도를 사용한다. 새 운영 도메인이 카카오
+  // 플랫폼 설정에 반영되기 전에도 위치 선택이 멈추지 않도록 아래 기본 지도를
+  // 자동 안전망으로 둔다.
   openKakaoNavigationMap();
 }
 
-function initNavigationMap(){
+let leafletSdkPromise=null;
+function loadLeafletSdk(){
+  if(window.L)return Promise.resolve(window.L);
+  if(leafletSdkPromise)return leafletSdkPromise;
+  leafletSdkPromise=new Promise((resolve,reject)=>{
+    if(!document.querySelector('link[data-56wan-leaflet]')){
+      const style=document.createElement('link');
+      style.rel='stylesheet';
+      style.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+      style.dataset['56wanLeaflet']='true';
+      document.head.appendChild(style);
+    }
+    const script=document.createElement('script');
+    script.async=true;
+    script.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    script.onload=()=>window.L?resolve(window.L):reject(Error('기본 지도 초기화에 실패했습니다.'));
+    script.onerror=()=>reject(Error('기본 지도 파일을 불러오지 못했습니다.'));
+    document.head.appendChild(script);
+  }).catch(error=>{leafletSdkPromise=null;throw error});
+  return leafletSdkPromise;
+}
+
+function openFallbackNavigationMap(reason=''){
+  modal.innerHTML=`<div class="modal map-modal navigation-map-modal"><section class="navigation-map-sheet"><div class="navigation-map-top"><button class="navigation-map-close" aria-label="지도 닫기" onclick="closeMap()">${icon('x')}</button><div class="navigation-map-title"><b>출발지를 지도에서 선택</b><span>원하는 위치를 한 번 누르세요.</span></div><button class="navigation-map-locate" aria-label="현재 위치로 이동" onclick="focusNavigationMap()">${icon('locate-fixed')}</button></div><div id="navigation-map" class="navigation-map-canvas"></div><div class="navigation-map-credit">OpenStreetMap</div><div class="navigation-map-bottom"><div id="navigation-map-status" class="navigation-map-status">기본 지도를 불러오는 중입니다.</div><button id="navigation-map-confirm" class="primary" disabled onclick="confirmMapPick()">이 위치를 출발지로 ${icon('arrow-right')}</button></div></section></div>`;
+  paintIcons();
+  loadLeafletSdk().then(()=>initNavigationMap(reason)).catch(error=>{
+    const status=document.getElementById('navigation-map-status');
+    if(status)status.textContent=error.message;
+  });
+}
+
+function initNavigationMap(fallbackReason=''){
   const status=document.getElementById('navigation-map-status');
   const confirm=document.getElementById('navigation-map-confirm');
   if(!window.L){status.textContent='지도를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.';return}
@@ -97,8 +129,8 @@ function initNavigationMap(){
   const center=selected||{x:127.7669,y:35.9078};
   const markerIcon=L.divIcon({className:'navigation-marker',html:'<span></span>',iconSize:[30,30],iconAnchor:[15,30]});
   navigationPickerMap=L.map('navigation-map',{zoomControl:false,attributionControl:false,zoomSnap:.25,minZoom:5,maxZoom:18}).setView([center.y,center.x],selected?14:7);
-  // 이전 외국 지도 타일 렌더러는 더 이상 사용하지 않는다. 실제 UI는 아래의
-  // openKakaoNavigationMap()만 호출하며 카카오 한글 지도를 렌더링한다.
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(navigationPickerMap);
+  status.textContent=fallbackReason?'카카오 지도 연결 전까지 기본 지도로 전환했습니다.':'지도를 눌러 출발지를 선택해 주세요.';
   let marker=selected?L.marker([selected.y,selected.x],{icon:markerIcon}).addTo(navigationPickerMap):null;
   const selectPoint=latlng=>{const point={x:+latlng.lng.toFixed(6),y:+latlng.lat.toFixed(6)};S.mapPick=point;if(marker)marker.setLatLng(latlng);else marker=L.marker(latlng,{icon:markerIcon}).addTo(navigationPickerMap);status.textContent='선택한 위치를 출발지로 사용합니다.';confirm.disabled=false};
   navigationPickerMap.on('click',event=>selectPoint(event.latlng));
@@ -188,7 +220,10 @@ function initKakaoNavigationMap(){
 function openKakaoNavigationMap(){
   modal.innerHTML=`<div class="modal map-modal kakao-navigation-map-modal"><section class="kakao-navigation-map-sheet"><div class="kakao-navigation-map-top"><button class="kakao-navigation-map-button" aria-label="지도 닫기" onclick="closeMap()">${icon('x')}</button><div class="kakao-navigation-map-title"><b>출발지를 지도에서 선택</b><span>원하는 위치를 한 번 누르세요.</span></div><button class="kakao-navigation-map-button" aria-label="현재 위치로 이동" onclick="focusKakaoNavigationMap()">${icon('locate-fixed')}</button></div><div id="kakao-navigation-map" class="kakao-navigation-map-canvas"></div><div class="kakao-navigation-map-credit">Kakao Map</div><div class="kakao-navigation-map-bottom"><div id="kakao-navigation-map-status" class="kakao-navigation-map-status">한글 지도를 불러오는 중입니다.</div><button id="kakao-navigation-map-confirm" class="primary" disabled onclick="confirmMapPick()">이 위치를 출발지로 ${icon('arrow-right')}</button></div></section></div>`;
   paintIcons();
-  loadKakaoMapSdk().then(initKakaoNavigationMap).catch(error=>renderKakaoMapError(error.message));
+  loadKakaoMapSdk().then(initKakaoNavigationMap).catch(error=>{
+    console.warn('[kakao map fallback]',error.message);
+    openFallbackNavigationMap(error.message);
+  });
 }
 
 function focusKakaoNavigationMap(){
@@ -205,21 +240,113 @@ const closeKakaoMap=closeMap;
 closeMap=()=>{kakaoPickerMap=null;kakaoPickerMarker=null;closeKakaoMap()};
 openMap=()=>{if(!blockHomeMapOpen)openKakaoNavigationMap()};
 </script><style>
-.concept-heading{margin:20px 0 8px;font-size:16px;font-weight:800;letter-spacing:-.45px;color:#263249}.concept-help{margin:-2px 0 12px;color:#718096;font-size:13px;line-height:1.5}.concept-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.concept-card{min-height:88px;padding:12px;border:1px solid #e3e8f0;border-radius:18px;background:#fff;color:#1d2939;text-align:left;box-shadow:0 2px 7px #26354a08}.concept-card.on{border-color:#1f6feb;background:#eff6ff;box-shadow:0 0 0 2px #1f6feb18}.concept-card .concept-title-row{display:flex;align-items:center;gap:8px;min-height:32px}.concept-card .concept-icon{display:grid;flex:0 0 32px;place-items:center;width:32px;height:32px;border-radius:11px;background:#edf3ff;color:#216ee5}.concept-card.on .concept-icon{background:#dcecff}.concept-card b{display:block;font-size:14px;line-height:1.2;letter-spacing:-.65px}.concept-card small{display:block;margin-top:7px;color:#758195;font-size:11px;line-height:1.3;word-break:keep-all}.theme-selected-note{display:flex;align-items:center;gap:7px;margin:13px 0 -1px;padding:11px 12px;border-radius:13px;background:#f2f6fd;color:#425c87;font-size:12px;font-weight:700}.review-box{margin-top:13px;padding:11px 12px;border:1px solid #edf0f4;border-radius:14px;background:#fafbfc}.review-label{margin:0 0 7px;color:#526179;font-size:11px;font-weight:800}.review-snippet{display:block;overflow:hidden;margin-top:6px;color:#596578;font-size:12px;line-height:1.45;text-decoration:none;text-overflow:ellipsis;white-space:nowrap}.review-snippet:first-of-type{margin-top:0}.review-snippet:before{content:'“';color:#2868c9;font-weight:900}.review-snippet:after{content:'”';color:#2868c9;font-weight:900}.review-empty{margin-top:13px;color:#8a95a5;font-size:12px}.theme-result-copy{margin:-2px 0 15px;color:#718096;font-size:13px}.selected-theme-heading{display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin-bottom:13px!important}.selected-theme-heading svg{flex:0 0 auto}.selected-theme-badge{display:inline-flex;align-items:center;min-height:30px;padding:5px 10px;border:1px solid #cbdcff;border-radius:11px;background:#edf3ff;color:#245bbb;font-size:16px;font-weight:850;letter-spacing:-.55px;line-height:1.2}.season-note{margin-top:10px;color:#778397;font-size:11px;line-height:1.45}
+.concept-heading{display:flex;align-items:center;justify-content:center;gap:7px;margin:22px 0 5px;color:#1f2d45;font-size:19px;font-weight:850;letter-spacing:-.7px}.concept-heading svg{width:19px;height:19px;color:#2769cf}.concept-help{margin:0 0 14px;color:#718096;font-size:12px;line-height:1.5;text-align:center}.concept-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.concept-card{min-height:88px;padding:12px;border:1px solid #e3e8f0;border-radius:18px;background:#fff;color:#1d2939;text-align:left;box-shadow:0 2px 7px #26354a08}.concept-card.on{border-color:#1f6feb;background:#eff6ff;box-shadow:0 0 0 2px #1f6feb18}.concept-card .concept-title-row{display:flex;align-items:center;gap:8px;min-height:32px}.concept-card .concept-icon{display:grid;flex:0 0 32px;place-items:center;width:32px;height:32px;border-radius:11px;background:#edf3ff;color:#216ee5}.concept-card.on .concept-icon{background:#dcecff}.concept-card b{display:block;font-size:14px;line-height:1.2;letter-spacing:-.65px}.concept-card small{display:block;margin-top:7px;color:#758195;font-size:11px;line-height:1.3;word-break:keep-all}.theme-selected-note{display:flex;align-items:center;justify-content:center;gap:7px;margin:13px 0 -1px;padding:12px;border-radius:13px;background:#f2f6fd;color:#425c87;font-size:12px;font-weight:700;text-align:center}.theme-selected-note svg{width:18px;height:18px;color:#3567b8}.primary:disabled,.refresh:disabled{background:#e8edf5;color:#a4adbb;box-shadow:none;cursor:not-allowed}.refresh:disabled{border-color:#e8edf5}.culture-age{margin:1px 0 8px;color:#47628f;font-size:12px;font-weight:800;letter-spacing:-.2px}.review-box{margin-top:13px;padding:11px 12px;border:1px solid #edf0f4;border-radius:14px;background:#fafbfc}.review-label{margin:0 0 7px;color:#526179;font-size:11px;font-weight:800}.review-snippet{display:block;overflow:hidden;margin-top:6px;color:#596578;font-size:12px;line-height:1.45;text-decoration:none;text-overflow:ellipsis;white-space:nowrap}.review-snippet:first-of-type{margin-top:0}.review-snippet:before{content:'“';color:#2868c9;font-weight:900}.review-snippet:after{content:'”';color:#2868c9;font-weight:900}.review-empty{margin-top:13px;color:#8a95a5;font-size:12px}.theme-result-copy{margin:-2px 0 15px;color:#718096;font-size:13px}.selected-theme-heading{display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin-bottom:13px!important}.selected-theme-heading svg{flex:0 0 auto}.selected-theme-badge{display:inline-flex;align-items:center;min-height:30px;padding:5px 10px;border:1px solid #cbdcff;border-radius:11px;background:#edf3ff;color:#245bbb;font-size:16px;font-weight:850;letter-spacing:-.55px;line-height:1.2}.season-note{margin-top:10px;color:#778397;font-size:11px;line-height:1.45}
 .culture-calendar{margin-top:8px;padding:11px;border:1px solid #dde6f7;border-radius:16px;background:#f8fbff}.culture-calendar-header{display:flex;align-items:center;justify-content:space-between;gap:7px;margin-bottom:9px}.culture-calendar-title{margin:0;color:#334e7b;font-size:14px;font-weight:850;letter-spacing:-.35px;white-space:nowrap}.culture-calendar-nav{display:inline-flex;align-items:center;justify-content:center;gap:2px;min-width:67px;height:31px;padding:0 7px;border:1px solid #d7e1f1;border-radius:9px;background:#fff;color:#3564a5;font-size:11px;font-weight:800;white-space:nowrap}.culture-calendar-nav:disabled{border-color:transparent;background:transparent;color:#c7cbd2}.culture-calendar-nav svg{width:14px;height:14px}.culture-calendar-week,.culture-calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}.culture-calendar-week{margin-bottom:4px;color:#8390a4;font-size:10px;font-weight:800;text-align:center}.culture-calendar-day{display:grid;place-items:center;min-height:34px;padding:0;border:1px solid transparent;border-radius:10px;background:#fff;color:#43516a;font-size:12px;font-weight:750}.culture-calendar-day.on{border-color:#2563eb;background:#2563eb;color:#fff}.culture-calendar-day:disabled{background:transparent;color:#c7cbd2}.culture-calendar-blank{min-height:34px}
 /* iPhone 안전영역을 높이에 포함해야 하단 버튼이 위로 밀리지 않는다. */
-.app{padding-bottom:calc(90px + env(safe-area-inset-bottom))}.bottom{height:calc(78px + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);align-items:stretch}.bottom .nav{min-height:78px}
+.app{padding-bottom:calc(90px + env(safe-area-inset-bottom))}.contact{padding:6px 18px 94px;text-align:right;color:#8a8d94;font-size:11px;letter-spacing:-.2px}.contact a{color:inherit;text-decoration:none}.bottom{height:calc(78px + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);align-items:stretch}.bottom .nav{min-height:78px}.place-info-row{display:flex;align-items:center;gap:10px}.place-info-row .meta{min-width:0;flex:1}.map-address{color:inherit;text-decoration:underline;text-decoration-color:#c6ceda;text-decoration-thickness:1px;text-underline-offset:3px}.detail-icon{display:grid;place-items:center;flex:0 0 38px;width:38px;height:38px;border:1px solid #dfe6f1;border-radius:12px;background:#f0f4ff;color:#355fb3;text-decoration:none}.detail-icon svg{width:18px;height:18px}
 </style><script>
+document.querySelector(".app .bottom")?.insertAdjacentHTML("beforebegin",'<footer class="contact">광고·협업 문의 <a href="mailto:foros2839@naver.com">foros2839@naver.com</a><span class="visit-counter" id="visit-counter"> · 누적 방문 <b id="visit-count">-</b>회</span></footer>');
+async function recordVisitCount(){
+  const countEl=document.getElementById('visit-count');
+  if(!countEl)return;
+  const cachedCount=sessionStorage.getItem('56wan-visit-count');
+  if(cachedCount){countEl.textContent=cachedCount;return}
+  try{
+    const response=await fetch('/api/app?mode=visit-count',{cache:'no-store'});
+    const data=await response.json();
+    if(!response.ok||!data?.ok||!Number.isFinite(Number(data.count)))throw Error('counter unavailable');
+    const formatted=Number(data.count).toLocaleString('ko-KR');
+    sessionStorage.setItem('56wan-visit-count',formatted);
+    countEl.textContent=formatted;
+  }catch{document.getElementById('visit-counter')?.remove()}
+}
+recordVisitCount();
+/* Vercel Web Analytics: 공개 주소(56wan) 기준의 방문·페이지 조회를 기록한다. */
+window.va=window.va||function(){(window.vaq=window.vaq||[]).push(arguments)};
+if(!document.querySelector('script[data-56wan-analytics]')){
+  const analyticsScript=document.createElement('script');
+  analyticsScript.defer=true;
+  analyticsScript.src='https://cdn.vercel-insights.com/v1/script.js';
+  analyticsScript.dataset['56wanAnalytics']='true';
+  document.head.appendChild(analyticsScript);
+}
+
+/* 위치 권한은 검색 직전이 아니라 사용자가 "현재 위치"를 고르는 즉시 요청한다.
+   iPhone/Safari에서 한 번 거절한 경우에도 원인을 숨기지 않고 바로 대안을 안내한다. */
+function locationGuideMessage(error){
+  if(!navigator.geolocation)return '이 브라우저에서는 현재 위치 기능을 지원하지 않습니다.';
+  if(!window.isSecureContext)return '현재 위치는 안전한 HTTPS 연결에서만 사용할 수 있습니다.';
+  if(error?.code===1)return '현재 위치 권한이 꺼져 있습니다. iPhone Safari에서는 주소창의 aA → 웹 사이트 설정 → 위치 → 허용에서 켤 수 있습니다.';
+  if(error?.code===2)return '현재 위치 정보를 가져오지 못했습니다. 잠시 후 다시 시도해 주세요.';
+  if(error?.code===3)return '현재 위치 확인 시간이 초과되었습니다. 신호가 좋은 곳에서 다시 시도해 주세요.';
+  return error?.message||'현재 위치를 가져오지 못했습니다.';
+}
+function currentPosition(options){
+  return new Promise((resolve,reject)=>{
+    if(!navigator.geolocation){reject(Error('이 브라우저에서는 현재 위치 기능을 지원하지 않습니다.'));return}
+    navigator.geolocation.getCurrentPosition(resolve,reject,options);
+  });
+}
+async function getCurrentOrigin(){
+  if(!window.isSecureContext)throw Error('현재 위치는 안전한 HTTPS 연결에서만 사용할 수 있습니다.');
+  try{
+    const point=await currentPosition({enableHighAccuracy:true,timeout:12000,maximumAge:60000});
+    return {x:point.coords.longitude,y:point.coords.latitude};
+  }catch(firstError){
+    if(firstError?.code!==3)throw firstError;
+    const point=await currentPosition({enableHighAccuracy:false,timeout:12000,maximumAge:300000});
+    return {x:point.coords.longitude,y:point.coords.latitude};
+  }
+}
+function showLocationGuide(error){
+  const message=locationGuideMessage(error);
+  modal.innerHTML=`<div class="modal"><div class="sheet"><button class="x" onclick="closeMap()">${icon('x')}</button><div class="section">현재 위치를 사용할 수 없어요</div><p class="hint" style="margin:0 0 16px;line-height:1.65">${esc(message)}</p><button class="primary" onclick="requestCurrentLocation()">다시 현재 위치 확인</button><button class="soft-btn" style="margin-top:9px;width:100%" onclick="closeMap();S.origin='지도에서 선택';S.originPos=null;home();openMap()">지도에서 선택</button><button class="soft-btn" style="margin-top:9px;width:100%" onclick="closeMap();S.origin='직접 입력';S.originPos=null;home()">주소 직접 입력</button></div></div>`;
+  paintIcons();
+}
+async function requestCurrentLocation(){
+  try{
+    const origin=await getCurrentOrigin();
+    S.origin='현재 위치';S.originPos=origin;S.mapPick=null;
+    if(modal.innerHTML)closeMap();
+    home();
+  }catch(error){showLocationGuide(error)}
+}
+const resolveOriginBeforeLocationFix=resolveOrigin;
+resolveOrigin=async()=>{
+  if(S.origin!=='현재 위치')return resolveOriginBeforeLocationFix();
+  if(S.originPos)return S.originPos;
+  const origin=await getCurrentOrigin();
+  return S.originPos=origin;
+};
+const setvBeforeLocationFix=setv;
+setv=(key,value)=>{
+  if(key==='origin'&&value==='현재 위치'){
+    S.origin=value;S.originPos=null;S.mapPick=null;normalizeSchedule();home();requestCurrentLocation();return;
+  }
+  return setvBeforeLocationFix(key,value);
+};
+
+/* 카카오 SDK 로딩이 멈추거나 지도가 빈 화면인 경우 기본 지도로 바로 전환한다. */
+const loadKakaoMapSdkBeforeTimeout=loadKakaoMapSdk;
+loadKakaoMapSdk=()=>Promise.race([
+  loadKakaoMapSdkBeforeTimeout(),
+  new Promise((_,reject)=>setTimeout(()=>reject(Error('카카오 지도 연결 시간이 초과되었습니다. 기본 지도로 전환합니다.')),8000))
+]);
+const initKakaoNavigationMapBeforeResize=initKakaoNavigationMap;
+initKakaoNavigationMap=()=>{
+  initKakaoNavigationMapBeforeResize();
+  setTimeout(()=>{if(kakaoPickerMap&&window.kakao?.maps?.event)kakao.maps.event.trigger(kakaoPickerMap,'resize')},180);
+};
 // 사용자가 먼저 '오늘의 나들이 종류'를 고르고, 그 한 종류의 후보만 받는다.
 // 내부 검색어는 세분화해 두되, 화면에는 겹치지 않는 여섯 대분류만 보여준다.
-const USER_THEME_KEYS=['craft','experience','indoor','playground','animals','culture','season'];
+const USER_THEME_KEYS=['culture','craft','experience','indoor','playground','animals','season'];
 Object.assign(ALL_THEMES,{
   craft:['palette','창작 놀이','도예 · 쿠킹 · 흙놀이 · 미술'],
   experience:['flask-conical','문화 · 전시','어린이체험관 · 과학관 · 전시'],
   indoor:['gamepad-2','실내 놀이','키즈카페 · 트램폴린 · 빙상장'],
   playground:['tree-pine','놀이터 · 야외놀이','공원 · 모래놀이 · 유아숲'],
   animals:['paw-print','동물 · 자연체험','동물원 · 농장 · 숲 · 수목원'],
-  culture:['building-2','문화센터','백화점 · 마트 · 아울렛 강좌'],
+  culture:['building-2','문화센터 원데이클래스','백화점 · 마트 · 아울렛 강좌'],
   season:['sparkles','시즌 한정','물놀이 · 눈놀이 · 계절 나들이']
 });
 ['nature','books','water','show','festival'].forEach(key=>delete ALL_THEMES[key]);
@@ -234,6 +361,13 @@ function localYmd(date=new Date()){
 function normalizeCultureDate(){
   const today=localYmd();
   if(!/^\d{4}-\d{2}-\d{2}$/.test(S.cultureDate||'')||S.cultureDate<today)S.cultureDate=today;
+}
+
+function cultureDateLabel(value){
+  const match=String(value||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(!match)return '';
+  const weekday=['일','월','화','수','목','금','토'][new Date(Date.UTC(Number(match[1]),Number(match[2])-1,Number(match[3]))).getUTCDay()];
+  return `${Number(match[2])}/${Number(match[3])} (${weekday})`;
 }
 
 function cultureMonthKey(date){
@@ -277,14 +411,15 @@ function chooseCultureDate(date){S.cultureDate=date;S.cultureCalendarMonth=date.
 function conceptCard(key){
   const [glyph,title,description]=ALL_THEMES[key];
   const selected=S.themes.includes(key);
-  return `<button class="concept-card ${selected?'on':''}" aria-pressed="${selected}" onclick="chooseTheme('${key}')"><span class="concept-title-row"><span class="concept-icon">${icon(glyph)}</span><b>${esc(title)}</b></span><small>${esc(description)}</small></button>`;
+  const titleHtml=key==='culture'?'문화센터<br>원데이클래스':esc(title);
+  return `<button class="concept-card ${selected?'on':''}" aria-pressed="${selected}" onclick="chooseTheme('${key}')"><span class="concept-title-row"><span class="concept-icon">${icon(glyph)}</span><b>${titleHtml}</b></span><small>${esc(description)}</small></button>`;
 }
 
 function chooseTheme(key){
   S.themes=S.themes.includes(key)?S.themes.filter(selected=>selected!==key):[...S.themes,key];
   S.theme=S.themes[0]||null;
   if(S.themes.includes('culture'))normalizeCultureDate();
-  S.items=[];
+  S.items=[];S.hasMoreRecommendations=false;
   home();
 }
 
@@ -330,7 +465,7 @@ function naverMapSearchUrl(place){
   const query=[place.name,area].filter(Boolean).join(' ').trim();
   return `https://map.naver.com/p/search/${encodeURIComponent(query)}`;
 }
-placeCard=(place,canSelect=true)=>{const programTitles=Array.isArray(place.cultural_programs)?place.cultural_programs.filter(Boolean).slice(0,3):[];const programPeriods=Array.isArray(place.cultural_program_periods)?place.cultural_program_periods.filter(Boolean).slice(0,2):[];const programSummary=programTitles.length?`<div class="program-summary"><b>진행 중인 전시 · 프로그램</b>${programTitles.map(title=>`<span class="program-title">${esc(title)}</span>`).join('')}${programPeriods.length?`<small>${esc(programPeriods.join(' · '))}</small>`:''}</div>`:'';const officialProgramTag=place.official_child_program_evidence?`<span class="tag">공식 확인 · 유아·어린이 프로그램 운영</span>`:'';return `<div class="card place"><h3>${esc(place.name)}</h3><div class="meta">${icon('car-front')} ${place.route_estimated?'예상 ':'실제 차량 약 '}${place.route_minutes}분${place.transit_minutes!=null?`<br>${icon('bus-front')} 대중교통 약 ${place.transit_minutes}분`:''} · ${esc(place.category||'장소')}<br>${esc(place.road_address||place.address||'')}</div>${officialProgramTag}${programSummary}<div class="place-actions"><a class="link-btn" target="_blank" rel="noopener" href="${naverMapSearchUrl(place)}">${icon('map-pinned')} 네이버 지도</a><a class="link-btn" target="_blank" rel="noopener" href="https://m.search.naver.com/search.naver?query=${encodeURIComponent(place.name)}">${icon('arrow-up-right')} 상세·예약</a>${canSelect?`<button class="select" onclick="chooseMain('${place.id}')">선택 ${icon('chevron-right')}</button>`:''}</div></div>`;};
+placeCard=(place,canSelect=true)=>{const programTitles=Array.isArray(place.cultural_programs)?place.cultural_programs.filter(Boolean).slice(0,3):[];const programPeriods=Array.isArray(place.cultural_program_periods)?place.cultural_program_periods.filter(Boolean).slice(0,2):[];const programSummary=programTitles.length?`<div class="program-summary"><b>진행 중인 전시 · 프로그램</b>${programTitles.map(title=>`<span class="program-title">${esc(title)}</span>`).join('')}${programPeriods.length?`<small>${esc(programPeriods.join(' · '))}</small>`:''}</div>`:'';const officialProgramTag=place.official_child_program_evidence?`<span class="tag">공식 확인 · 유아·어린이 프로그램 운영</span>`:'';return `<div class="card place"><h3>${esc(place.name)}</h3><div class="meta">${icon('car-front')} ${place.route_estimated?'예상 ':'차량 약 '}${place.route_minutes}분${place.transit_minutes!=null?`<br>${icon('bus-front')} 대중교통 약 ${place.transit_minutes}분`:''} · ${esc(place.category||'장소')}<br>${esc(place.road_address||place.address||'')}</div>${officialProgramTag}${programSummary}<div class="place-actions"><a class="link-btn" target="_blank" rel="noopener" href="${naverMapSearchUrl(place)}">${icon('map-pinned')} 네이버 지도</a><a class="link-btn" target="_blank" rel="noopener" href="https://m.search.naver.com/search.naver?query=${encodeURIComponent(place.name)}">${icon('arrow-up-right')} 상세·예약</a>${canSelect?`<button class="select" onclick="chooseMain('${place.id}')">선택 ${icon('chevron-right')}</button>`:''}</div></div>`;};
 
 // 시간대 선택 없이, 메인 하나와 필요한 보조 장소만 담는 흐름으로 마무리한다.
 function ensureOptionalPicks(){
@@ -349,14 +484,18 @@ home=()=>{
   if(S.themes.includes('culture'))normalizeCultureDate();
   const selectedNames=S.themes.map(key=>ALL_THEMES[key]?.[1]).filter(Boolean);
   const cultureSchedule=S.themes.includes('culture')?field('calendar-days','놀이 일정',cultureCalendar()):'';
-  render(`<div class="card"><div class="concept-heading">테마 선택</div><div class="concept-help">복수 선택 가능</div><div class="concept-grid">${USER_THEME_KEYS.map(conceptCard).join('')}</div>${selectedNames.length?`<div class="theme-selected-note">${icon('sparkles')} <span><b>${selectedNames.length}개 테마 선택</b> · ${esc(selectedNames.join(', '))}</span></div>`:''}${cultureSchedule}${field('map-pin','출발지',`<div class="chips">${['현재 위치','지도에서 선택','직접 입력'].map(value=>chip('origin',value)).join('')}</div>${S.origin==='지도에서 선택'?`<div class="hint" style="margin-top:8px">${S.mapPick?'선택한 위치를 출발지로 사용합니다.':'지도를 열어 출발할 곳을 선택해 주세요.'}</div>`:''}${S.origin==='직접 입력'?`<input class="input" style="margin-top:9px" value="${esc(S.originText)}" placeholder="전국 도로명주소 또는 장소명" oninput="S.originText=this.value;S.originPos=null">`:''}`)}${field('car-front','이동시간',`<div class="chips">${chip('drive',30,'약 30분')}${chip('drive',60,'약 1시간')}</div><div class="hint" style="margin-top:7px">차량 실제 이동시간 기준입니다. 약 30분은 40분까지, 약 1시간은 75분까지 포함합니다.</div>`)}<button class="primary" ${selectedNames.length?'':'disabled'} onclick="showRecommendations()">검색</button></div>`);
+  render(`<div class="card"><div class="concept-heading">${icon('tags')} 테마 선택</div><div class="concept-help">여러 개를 골라 우리 가족에게 맞춰보세요</div><div class="concept-grid">${USER_THEME_KEYS.map(conceptCard).join('')}</div>${selectedNames.length?`<div class="theme-selected-note">${icon('list-checks')} <span><b>${selectedNames.length}개 테마 선택</b> · ${esc(selectedNames.join(', '))}</span></div>`:''}${cultureSchedule}${field('map-pin','출발지',`<div class="chips">${['현재 위치','지도에서 선택','직접 입력'].map(value=>chip('origin',value)).join('')}</div>${S.origin==='지도에서 선택'?`<div class="hint" style="margin-top:8px">${S.mapPick?'선택한 위치를 출발지로 사용합니다.':'지도를 열어 출발할 곳을 선택해 주세요.'}</div>`:''}${S.origin==='직접 입력'?`<input class="input" style="margin-top:9px" value="${esc(S.originText)}" placeholder="전국 도로명주소 또는 장소명" oninput="S.originText=this.value;S.originPos=null">`:''}`)}${field('car-front','이동시간',`<div class="chips">${chip('drive',30,'약 30분')}${chip('drive',60,'약 1시간')}</div><div class="hint" style="margin-top:7px">차량 실제 이동시간 기준입니다. 약 30분은 40분까지, 약 1시간은 75분까지 포함합니다.</div>`)}<button class="primary" ${selectedNames.length?'':'disabled'} onclick="showRecommendations()">검색</button></div>`);
   requestAnimationFrame(paintIcons);
 };
 
 renderThemeItems=()=>{
-  const selectedNames=S.themes.map(key=>ALL_THEMES[key]?.[1]).filter(Boolean);
+  const selectedBadges=S.themes.map(key=>{
+    const title=ALL_THEMES[key]?.[1]||key;
+    const label=key==='culture'?[title,cultureDateLabel(S.cultureDate)].filter(Boolean).join(' · '):title;
+    return `<span class="selected-theme-badge">${esc(label)}</span>`;
+  }).join('');
   navSet('back');
-  render(`<div class="list-title"><div><div class="section" style="margin-bottom:4px">${icon('sparkles')} 선택한 테마</div><div class="theme-result-copy">${esc(selectedNames.join(', '))}</div><div class="theme-result-copy">테마 조건과 이동시간을 통과한 후보입니다.</div><div class="theme-result-copy">영업시간·예약은 각 장소의 ‘상세·예약’에서 최종 확인해 주세요.</div></div></div>${S.themes.includes('season')?`<div class="season-note">계절 운영 여부는 방문 전 각 장소에서 확인해 주세요.</div>`:''}${S.items.map(place=>placeCard(place)).join('')}`);
+  render(`<div class="list-title"><div><div class="section selected-theme-heading">${selectedBadges}</div></div></div>${S.items.map(place=>placeCard(place)).join('')}`);
   requestAnimationFrame(paintIcons);
 };
 
@@ -545,6 +684,7 @@ showRecommendations=async()=>{
     const data=await requestThemeRecommendations();
     S.transitEnabled=data.transitEnabled;
     S.items=data.items||[];
+    S.hasMoreRecommendations=!!data.hasMore;
     if(!S.items.length)throw Error('이 조건에 맞는 후보를 찾지 못했습니다. 이동시간을 넓히거나 다른 테마를 골라 주세요.');
     renderThemeItems();
   }catch(error){fail(error.message)}
@@ -557,33 +697,75 @@ refreshThemeItems=async()=>{
     const data=await requestThemeRecommendations(excluded);
     const items=data.items||[];
     if(!items.length){
+      S.hasMoreRecommendations=false;
       renderThemeItems();
-      alert('현재 조건에서 더 보여드릴 후보가 없습니다. 이동시간이나 테마를 바꿔 보세요.');
       return;
     }
     S.seenRecommendationIds=excluded;
     S.items=items;
+    S.hasMoreRecommendations=!!data.hasMore;
     renderThemeItems();
   }catch(error){fail(error.message)}
 };
 
 renderThemeItems=()=>{
-  const selectedNames=S.themes.map(key=>ALL_THEMES[key]?.[1]).filter(Boolean);
-  const cultureSelected=S.themes.includes('culture');
+  const selectedBadges=S.themes.map(key=>{
+    const title=ALL_THEMES[key]?.[1]||key;
+    const label=key==='culture'?[title,cultureDateLabel(S.cultureDate)].filter(Boolean).join(' · '):title;
+    return `<span class="selected-theme-badge">${esc(label)}</span>`;
+  }).join('');
   navSet('back');
-  render(`<div class="list-title"><div><div class="section selected-theme-heading">${icon('sparkles')} <span>선택한 테마</span><span class="selected-theme-badge">${esc(selectedNames.join(' · '))}</span></div>${cultureSelected?`<div class="theme-result-copy">${esc(S.cultureDate||'')}에 실제 수업 일정이 확인된 인근 대형 쇼핑몰만 보여드려요.</div>`:''}<div class="theme-result-copy">선택한 이동시간 안에서 실제 차량시간을 통과한 후보입니다.</div><div class="theme-result-copy">수업 시간·접수 상태는 공식 상세에서 최종 확인해 주세요.</div></div></div>${S.themes.includes('season')?`<div class="season-note">계절 운영 여부는 방문 전 각 장소에서 확인해 주세요.</div>`:''}${S.items.map(place=>placeCard(place)).join('')}<button class="refresh" onclick="refreshThemeItems()">${icon('refresh-cw')} 다른 후보 보기</button>`);
+  const more=!!S.hasMoreRecommendations;
+  render(`<div class="list-title"><div><div class="section selected-theme-heading">${selectedBadges}</div></div></div>${S.items.map(place=>placeCard(place)).join('')}<button class="refresh" ${more?'':'disabled'} onclick="${more?'refreshThemeItems()':''}">${icon(more?'refresh-cw':'check')} ${more?'다른 후보 보기':'모든 추천을 확인했어요'}</button>`);
   requestAnimationFrame(paintIcons);
 };
 // 장소 검색·지도 링크는 실제 시설명을 유지하고, 카드 제목만 검증된 전시명으로 보강한다.
 const basePlaceCard=placeCard;
+const compactPlaceCard=place=>{
+  const programTitles=Array.isArray(place.cultural_programs)?place.cultural_programs.filter(Boolean).slice(0,3):[];
+  const programPeriods=Array.isArray(place.cultural_program_periods)?place.cultural_program_periods.filter(Boolean).slice(0,2):[];
+  const programSummary=programTitles.length?`<div class="program-summary"><b>진행 중인 전시 · 프로그램</b>${programTitles.map(title=>`<span class="program-title">${esc(title)}</span>`).join('')}${programPeriods.length?`<small>${esc(programPeriods.join(' · '))}</small>`:''}</div>`:'';
+  const officialProgramTag=place.official_child_program_evidence?`<span class="tag">공식 확인 · 유아·어린이 프로그램 운영</span>`:'';
+  const address=place.road_address||place.address||'';
+  return `<div class="card place"><h3>${esc(place.name)}</h3><div class="place-info-row"><div class="meta">${icon('car-front')} ${place.route_estimated?'예상 ':'차량 약 '}${place.route_minutes}분${place.transit_minutes!=null?`<br>${icon('bus-front')} 대중교통 약 ${place.transit_minutes}분`:''} · ${esc(place.category||'장소')}<br><a class="map-address" target="_blank" rel="noopener" href="${naverMapSearchUrl(place)}">${esc(address)}</a></div><a class="detail-icon" target="_blank" rel="noopener" href="https://m.search.naver.com/search.naver?query=${encodeURIComponent(place.name)}" aria-label="상세 보기" title="상세 보기">${icon('search')}</a></div>${officialProgramTag}${programSummary}</div>`;
+};
+const cultureCourseTitle=place=>{
+  const digits=String(place.culture_date||'').replace(/\D/g,'');
+  let title=String(place.name||'').trim();
+  if(digits.length>=8){
+    const month=Number(digits.slice(4,6)),day=Number(digits.slice(6,8));
+    const datePattern=new RegExp(`(?:20\\d{2}[.\\-/])?0?${month}[.\\-/]0?${day}(?:\\s*[\\(\\[][^^\\)\\]]*[\\)\\]])?`,'g');
+    title=title.replace(datePattern,' ');
+  }
+  // 시작 시간은 카드 맨 앞에 한 번만 붙인다. 원본 제목에 다시 섞여 있는
+  // 시간·연령 조건은 아래의 전용 줄로 옮겨 제목을 짧게 유지한다.
+  title=title.replace(/\b(?:[01]?\d|2[0-3]):[0-5]\d\b/g,' ');
+  const age=String(place.culture_age||'').trim();
+  if(age){
+    const escaped=age.replace(/[.*+?^${}()|[\]\\]/g,'\\$&').replace(/\s+/g,'\\s*');
+    // '(4~6세, 보호자 1인)'처럼 괄호에 다른 안내도 있으면 그 안내는 남기고,
+    // 연령 부분만 뺀다. 연령만 있던 괄호는 통째로 지운다.
+    title=title.replace(new RegExp(`([\\(\\[])([^\\)\\]]*?)${escaped}([^\\)\\]]*)([\\)\\]])`,'gi'),(_,open,before,after,close)=>{
+      const rest=`${before} ${after}`.replace(/^[\s,·:|/~-]+|[\s,·:|/~-]+$/g,'').replace(/\s{2,}/g,' ').trim();
+      return rest?`${open}${rest}${close}`:' ';
+    });
+    title=title.replace(new RegExp(escaped,'gi'),' ');
+  }
+  return title.replace(/[\[\(]\s*[\]\)]/g,' ').replace(/\s{2,}/g,' ').replace(/^[\s·:|,-]+|[\s·:|,-]+$/g,'').trim();
+};
+const cultureCardTitle=place=>{
+  const timeMatch=String(place.culture_time||'').match(/\d{1,2}:\d{2}/);
+  return [timeMatch?.[0],cultureCourseTitle(place)].filter(Boolean).join(' ');
+};
 placeCard=place=>{
   if(place.culture_class){
     const mall=place.mall_name||place.category||'문화센터';
-    const classInfo=[place.culture_date_label,place.culture_time,place.culture_target,place.culture_price].filter(Boolean).join(' · ');
     const source=place.source_url||naverMapSearchUrl({...place,name:mall});
-    return `<div class="card place"><h3>${esc(place.name)}</h3><div class="meta">${icon('car-front')} ${place.route_estimated?'예상 ':'실제 차량 약 '}${place.route_minutes}분 · ${esc(mall)}<br>${esc(place.road_address||place.address||'')}</div><div class="program-summary"><b>문화센터</b><span class="program-title">${esc(classInfo)}</span><small>${esc(place.culture_status||'공식 상세에서 접수 상태를 확인해 주세요.')}</small></div><div class="place-actions"><a class="link-btn" target="_blank" rel="noopener" href="${naverMapSearchUrl({...place,name:mall})}">${icon('map-pinned')} 쇼핑몰 지도</a><a class="link-btn" target="_blank" rel="noopener" href="${esc(source)}">${icon('arrow-up-right')} 수업 상세</a></div></div>`;
+    const age=String(place.culture_age||'').trim();
+    const address=place.road_address||place.address||'';
+    return `<div class="card place"><h3>${esc(cultureCardTitle(place))}</h3>${age?`<div class="culture-age">가능 연령 · ${esc(age)}</div>`:''}<div class="place-info-row"><div class="meta">${icon('car-front')} ${place.route_estimated?'예상 ':'차량 약 '}${place.route_minutes}분 · ${esc(mall)}<br><a class="map-address" target="_blank" rel="noopener" href="${naverMapSearchUrl({...place,name:mall})}">${esc(address)}</a></div><a class="detail-icon" target="_blank" rel="noopener" href="${esc(source)}" aria-label="수업 상세" title="수업 상세">${icon('search')}</a></div></div>`;
   }
-  let card=basePlaceCard(place,false);
+  let card=compactPlaceCard(place);
   // 과학관은 프로그램 제목이 바뀌어도 목적지가 달라지지 않으므로 시설명만 간결하게 표시한다.
   if(/과학관/.test(place.name||''))card=card.replace(/<div class="program-summary">[\s\S]*?<\/div>/,'');
   if(!place.display_name||place.display_name===place.name)return card;
