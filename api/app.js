@@ -1,9 +1,26 @@
 const CORE_SOURCE_URL =
   "https://raw.githubusercontent.com/jmtghbd67p-commits/56wan/94e0a945245fbdc87caf1c0152cc81f6c8dc0940/api/app.js";
-const FESTIVAL_API = "https://api.data.go.kr/openapi/tn_pubr_public_cltur_fstvl_api";
+const FESTIVAL_API = "https://apis.data.go.kr/B551011/KorService2/searchFestival2";
 const KAKAO = process.env.KAKAO_REST_KEY;
 const FESTIVAL_KEY = process.env.CULTURE_DATA_SERVICE_KEY;
-const SIGUNGU_GRAPH = require("./sigungu-graph");
+let SIGUNGU_GRAPH = null;
+let sigunguGraphPromise = null;
+async function ensureSigunguGraph() {
+  if (SIGUNGU_GRAPH) return SIGUNGU_GRAPH;
+  if (!sigunguGraphPromise) {
+    sigunguGraphPromise = (async () => {
+      const r = await fetch("https://raw.githubusercontent.com/jmtghbd67p-commits/56wan/main/api/sigungu-graph.js", { cache: "force-cache" });
+      if (!r.ok) throw new Error(`시군구 그래프 로드 실패 ${r.status}`);
+      const src = await r.text();
+      const mod = { exports: {} };
+      const fn = new Function("module","exports","require","Buffer",src);
+      fn(mod, mod.exports, require, Buffer);
+      SIGUNGU_GRAPH = mod.exports;
+      return SIGUNGU_GRAPH;
+    })().catch(e => { sigunguGraphPromise = null; throw e; });
+  }
+  return sigunguGraphPromise;
+}
 
 let coreHandlerPromise;
 
@@ -35,6 +52,7 @@ async function loadCoreHandler() {
       const response = await fetch(CORE_SOURCE_URL, { cache: "force-cache" });
       if (!response.ok) throw new Error(`정상 백엔드 원본 로드 실패 ${response.status}`);
       const source = await response.text();
+      await ensureSigunguGraph();
       const mod = { exports: {} };
       const runner = new Function(
         "module","exports","require","process","fetch","URL","URLSearchParams",
@@ -58,7 +76,8 @@ async function loadCoreHandler() {
 
 function queryInfo(req) {
   const url = new URL(req.url, "http://local");
-  const get = key => req.query?.[key] ?? url.searchParams.get(key) ?? "";
+  const body = req.body && typeof req.body === "object" ? req.body : {};
+  const get = key => body[key] ?? req.query?.[key] ?? url.searchParams.get(key) ?? "";
   const themes = String(get("themes") || get("theme") || "")
     .split(",").map(v => v.trim()).filter(Boolean);
   return {
@@ -94,8 +113,8 @@ function recordValue(record, names) {
 }
 
 function activeOn(record, target) {
-  const start = digits8(recordValue(record, ["fstvlStartDate","eventStartDate","startDate"]));
-  const end = digits8(recordValue(record, ["fstvlEndDate","eventEndDate","endDate"])) || start;
+  const start = digits8(recordValue(record, ["eventstartdate","fstvlStartDate","eventStartDate","startDate"]));
+  const end = digits8(recordValue(record, ["eventenddate","fstvlEndDate","eventEndDate","endDate"])) || start;
   if (!target || !start) return true;
   return start <= target && target <= end;
 }
@@ -134,49 +153,49 @@ async function route(origin, target) {
   };
 }
 
-async function fetchFestivalRows() {
+
+
+async function fetchFestivalRows(visitDate) {
   if (!FESTIVAL_KEY) return [];
+  const target = digits8(visitDate) || new Date().toISOString().slice(0,10).replace(/-/g,"");
   let last = "";
   for (const serviceKey of serviceKeyVariants()) {
     const params = new URLSearchParams({
       serviceKey,
+      MobileOS: "ETC",
+      MobileApp: "56wan",
+      _type: "json",
+      numOfRows: "500",
       pageNo: "1",
-      numOfRows: "1000",
-      type: "json"
+      arrange: "A",
+      eventStartDate: target
     });
     const response = await fetch(`${FESTIVAL_API}?${params}`, { cache: "no-store" });
     const text = await response.text();
-    last = text.slice(0, 180);
+    last = text.slice(0, 240);
     let data = null;
     try { data = JSON.parse(text); } catch {}
     const rows = data ? rowsFrom(data) : [];
-    if (response.ok && rows.length) {
-      console.log("[festival api]", JSON.stringify({ status: response.status, total: rows.length }));
+    if (response.ok && data?.response?.header?.resultCode === "0000") {
+      console.log("[tourapi festival]", JSON.stringify({
+        status: response.status,
+        total: Number(data?.response?.body?.totalCount || rows.length),
+        returned: rows.length,
+        date: target
+      }));
       return rows;
     }
   }
-  console.warn("[festival api empty]", last);
+  console.warn("[tourapi festival empty]", last);
   return [];
 }
 
-function regionTokens(text) {
-  const t = String(text || "")
-    .replace(/전남광주통합특별시/g, "전라남도")
-    .replace(/전남특별자치도/g, "전라남도")
-    .replace(/전남/g, "전라남도")
-    .replace(/광주광역시/g, "광주")
-    .replace(/\s+/g, " ")
-    .trim();
-  const m = t.match(/(전라남도|전라북도|광주|서울|부산|대구|인천|대전|울산|세종|경기도|강원(?:특별자치도|도)?|충청북도|충청남도|경상북도|경상남도|제주(?:특별자치도)?)[ ]+([가-힣]+(?:시|군|구))/);
-  return m ? { province: m[1], district: m[2] } : null;
-}
 function normRegionName(v) {
   return String(v || "")
-    .replace(/전남광주통합특별시/g, "전라남도")
-    .replace(/전남특별자치도/g, "전라남도")
-    .replace(/^전남(?=\s)/g, "전라남도")
-    .replace(/강원특별자치도/g, "강원도")
-    .replace(/제주특별자치도/g, "제주도")
+    .replace(/전남광주통합특별시/g, "전남")
+    .replace(/전라남도/g, "전남")
+    .replace(/강원특별자치도/g, "강원")
+    .replace(/제주특별자치도/g, "제주")
     .replace(/\s+/g, "")
     .trim();
 }
@@ -198,13 +217,13 @@ async function originAdministrativeRegion(origin) {
 }
 function graphKeyFor(region) {
   if (!region) return null;
-  const wantedDistrict = normRegionName(region.district);
-  const wantedProvince = normRegionName(region.province);
+  const district = normRegionName(region.district);
+  const province = normRegionName(region.province);
   const keys = Object.keys(SIGUNGU_GRAPH || {});
   return keys.find(k => {
     const n = normRegionName(k);
-    return n.includes(wantedDistrict) && (!wantedProvince || n.includes(wantedProvince));
-  }) || keys.find(k => normRegionName(k).includes(wantedDistrict)) || null;
+    return n.includes(district) && (!province || n.includes(province));
+  }) || keys.find(k => normRegionName(k).includes(district)) || null;
 }
 function allowedGraphRegions(region, maxMinutes) {
   const start = graphKeyFor(region);
@@ -212,7 +231,7 @@ function allowedGraphRegions(region, maxMinutes) {
   const depthLimit = maxMinutes <= 40 ? 1 : 2;
   const seen = new Set([start]);
   let frontier = [start];
-  for (let depth = 0; depth < depthLimit; depth += 1) {
+  for (let depth = 0; depth < depthLimit; depth++) {
     const next = [];
     for (const key of frontier) {
       const neighbors = Array.isArray(SIGUNGU_GRAPH?.[key]) ? SIGUNGU_GRAPH[key] : [];
@@ -226,12 +245,12 @@ function allowedGraphRegions(region, maxMinutes) {
   return [...seen];
 }
 function festivalInAllowedRegion(row, allowed) {
-  if (!allowed?.length) return true;
-  const address = [recordValue(row, ["addr1","rdnmadr","roadNmAddr","lnmadr","address"]), recordValue(row, ["addr2"])].filter(Boolean).join(" ");
+  if (!allowed.length) return true;
+  const address = [recordValue(row, ["addr1","rdnmadr","roadNmAddr","lnmadr","address"]), recordValue(row, ["addr2"])]
+    .filter(Boolean).join(" ");
   const n = normRegionName(address);
   return allowed.some(r => {
-    const rt = regionTokens(String(r).replace(/([가-힣]+(?:시|군|구))$/, " $1"));
-    const district = rt?.district || String(r).match(/([가-힣]+(?:시|군|구))$/)?.[1] || "";
+    const district = String(r).match(/([가-힣]+(?:시|군|구))$/)?.[1] || "";
     return district && n.includes(normRegionName(district));
   });
 }
@@ -240,7 +259,8 @@ async function festivalItems(origin, maxMinutes, visitDate) {
   const targetDate = digits8(visitDate);
   const [allRows, originRegion] = await Promise.all([
     fetchFestivalRows(targetDate),
-    originAdministrativeRegion(origin)
+    originAdministrativeRegion(origin),
+    ensureSigunguGraph()
   ]);
   const allowed = allowedGraphRegions(originRegion, maxMinutes);
   const rows = allRows
@@ -251,58 +271,39 @@ async function festivalItems(origin, maxMinutes, visitDate) {
     origin: originRegion?.label || "",
     maxMinutes,
     allowedCount: allowed.length,
-    allowed: allowed.slice(0, 20),
+    allowed,
     before: allRows.length,
     after: rows.length
   }));
 
-  const candidates = [];
-  for (const row of rows) {
+  const routed = await Promise.all(rows.map(async row => {
     const name = recordValue(row, ["title","fstvlNm","festivalNm","eventNm","name"]);
-    if (!name) continue;
-    const address = [
-      recordValue(row, ["addr1","rdnmadr","roadNmAddr","lnmadr","address"]),
-      recordValue(row, ["addr2"])
-    ].filter(Boolean).join(" ");
-
+    if (!name) return null;
+    const address = [recordValue(row, ["addr1","rdnmadr","roadNmAddr","lnmadr","address"]), recordValue(row, ["addr2"])]
+      .filter(Boolean).join(" ");
     let x = Number(recordValue(row, ["mapx","longitude","lon","x"]));
     let y = Number(recordValue(row, ["mapy","latitude","lat","y"]));
     if (!Number.isFinite(x) || !Number.isFinite(y)) {
       const point = await geocode(address);
-      if (!point) continue;
+      if (!point) return null;
       x = point.x; y = point.y;
     }
-
-    const dx = (x - origin.x) * Math.cos(origin.y * Math.PI / 180);
-    const dy = y - origin.y;
-    const straightKm = Math.sqrt(dx*dx + dy*dy) * 111;
-    candidates.push({ row, name, address, x, y, straightKm });
-  }
-
-  candidates.sort((a,b) => a.straightKm - b.straightKm);
-
-  // 지역+인접 시군구로 이미 줄였으므로, 이 후보들에 대해서만 실제 차량시간을 확인한다.
-  const routed = await Promise.all(
-    candidates.slice(0, 30).map(async c => ({ ...c, route: await route(origin, {x:c.x,y:c.y}) }))
-  );
-
-  const results = [];
-  for (const c of routed) {
-    if (!c.route || c.route.minutes > maxMinutes) continue;
-    const start = recordValue(c.row, ["eventstartdate","fstvlStartDate","eventStartDate","startDate"]);
-    const end = recordValue(c.row, ["eventenddate","fstvlEndDate","eventEndDate","endDate"]);
-    results.push({
-      id: `festival:${c.name}:${digits8(start)}`,
-      name: c.name,
-      display_name: c.name,
+    const rt = await route(origin, {x,y});
+    if (!rt || rt.minutes > maxMinutes) return null;
+    const start = recordValue(row, ["eventstartdate","fstvlStartDate","eventStartDate","startDate"]);
+    const end = recordValue(row, ["eventenddate","fstvlEndDate","eventEndDate","endDate"]);
+    return {
+      id: `festival:${name}:${digits8(start)}`,
+      name,
+      display_name: name,
       category: "지역축제",
-      address: c.address,
-      road_address: c.address,
-      phone: recordValue(c.row, ["tel","phoneNumber","phone"]),
+      address,
+      road_address: address,
+      phone: recordValue(row, ["tel","phoneNumber","phone"]),
       place_url: "",
-      x: c.x, y: c.y,
-      route_minutes: c.route.minutes,
-      route_distance: c.route.distance,
+      x, y,
+      route_minutes: rt.minutes,
+      route_distance: rt.distance,
       route_estimated: false,
       family_evidence: 999,
       festival: true,
@@ -311,18 +312,17 @@ async function festivalItems(origin, maxMinutes, visitDate) {
       festival_end: end,
       season_kind: "festival",
       matched_themes: ["season"]
-    });
-  }
+    };
+  }));
 
-  results.sort((a,b) => a.route_minutes - b.route_minutes);
+  const results = routed.filter(Boolean).sort((a,b) => a.route_minutes - b.route_minutes);
   console.log("[festival result]", JSON.stringify({
     date: targetDate,
     regionCandidates: rows.length,
-    routed: routed.length,
     count: results.length,
     names: results.slice(0,10).map(x=>x.name)
   }));
-  return results.slice(0, 10);
+  return results.slice(0,10);
 }
 
 function captureResponse() {
