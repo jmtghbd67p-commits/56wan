@@ -3,6 +3,7 @@ const CORE_SOURCE_URL =
 const FESTIVAL_API = "https://api.data.go.kr/openapi/tn_pubr_public_cltur_fstvl_api";
 const KAKAO = process.env.KAKAO_REST_KEY;
 const FESTIVAL_KEY = process.env.CULTURE_DATA_SERVICE_KEY;
+const SIGUNGU_GRAPH = require("./sigungu-graph");
 
 let coreHandlerPromise;
 
@@ -40,8 +41,9 @@ async function loadCoreHandler() {
         "AbortController","Buffer","console","setTimeout","clearTimeout",
         source
       );
+      const localRequire = id => id === "./sigungu-graph" ? SIGUNGU_GRAPH : require(id);
       runner(
-        mod, mod.exports, require, process, fetch, URL, URLSearchParams,
+        mod, mod.exports, localRequire, process, fetch, URL, URLSearchParams,
         AbortController, Buffer, console, setTimeout, clearTimeout
       );
       if (typeof mod.exports !== "function") throw new Error("정상 백엔드 핸들러를 읽지 못했습니다.");
