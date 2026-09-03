@@ -1,38 +1,3 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "git": {
-    "deploymentEnabled": false
-  },
-  "redirects": [
-    {
-      "source": "/",
-      "has": [
-        {
-          "type": "header",
-          "key": "x-forwarded-host",
-          "value": "littletrip.vercel.app"
-        }
-      ],
-      "destination": "https://56wan.vercel.app/",
-      "permanent": true
-    },
-    {
-      "source": "/:path*",
-      "has": [
-        {
-          "type": "header",
-          "key": "x-forwarded-host",
-          "value": "littletrip.vercel.app"
-        }
-      ],
-      "destination": "https://56wan.vercel.app/:path*",
-      "permanent": true
-    }
-  ],
-  "functions": {
-    "api/app.js": {
-      "regions": ["icn1"],
-      "maxDuration": 30
-    }
-  }
+  "version": 2
 }
