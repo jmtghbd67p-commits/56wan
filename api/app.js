@@ -1,48 +1,274 @@
-const UPSTREAM='https://56wan-mwsz7p3y6-wk9q6nbk4w-4956.vercel.app';
-const FESTIVAL_API='https://api.data.go.kr/openapi/tn_pubr_public_cltur_fstvl_api';
-const KAKAO=process.env.KAKAO_REST_KEY, SERVICE_KEY=process.env.CULTURE_DATA_SERVICE_KEY;
-const key=v=>{try{return decodeURIComponent(v||'')}catch{return v||''}}, d8=v=>String(v||'').replace(/[^0-9]/g,'').slice(0,8), num=v=>Number.isFinite(+v)?+v:null;
-function selected(p,b){return d8(p.get('visitDate')||p.get('selectedDate')||p.get('date')||b.visitDate||b.selectedDate||b.date||new Date().toISOString().slice(0,10))}
-function rows(j){let x=j?.response?.body?.items?.item||j?.response?.body?.items||j?.items||[];return Array.isArray(x)?x:(x?[x]:[])}
-function active(r,d){let s=d8(r.fstvlStartDate||r.eventStartDate||r.startDate),e=d8(r.fstvlEndDate||r.eventEndDate||r.endDate||s);return !d||!s||(s<=d&&d<=(e||s))}
-async function geocode(a){if(!KAKAO||!a)return null;let r=await fetch(`https://dapi.kakao.com/v2/local/search/address.json?query=${encodeURIComponent(a)}`,{headers:{Authorization:`KakaoAK ${KAKAO}`}}),j=await r.json().catch(()=>({})),x=j?.documents?.[0];return x?{x:+x.x,y:+x.y}:null}
-async function route(o,t){if(!KAKAO||!o||!t)return null;let q=new URLSearchParams({origin:`${o.x},${o.y}`,destination:`${t.x},${t.y}`,priority:'TIME'}),r=await fetch(`https://apis-navi.kakaomobility.com/v1/directions?${q}`,{headers:{Authorization:`KakaoAK ${KAKAO}`}}),j=await r.json().catch(()=>({})),s=j?.routes?.[0]?.summary;return s?{minutes:Math.max(1,Math.round(s.duration/60)),distance:s.distance}:null}
-async function festivals(o,max,date){
-  if(!SERVICE_KEY||!o){console.log('[festival skip]',JSON.stringify({serviceKey:!!SERVICE_KEY,origin:!!o}));return[]}
-  let q=new URLSearchParams({serviceKey:key(SERVICE_KEY),pageNo:'1',numOfRows:'1000',type:'json'});
-  let r=await fetch(`${FESTIVAL_API}?${q}`),text=await r.text(),j={};
-  try{j=JSON.parse(text)}catch{}
-  const all=rows(j), matched=all.filter(x=>active(x,date));
-  console.log('[festival api]',JSON.stringify({status:r.status,total:all.length,date,active:matched.length,body:all.length?'ok':text.slice(0,180)}));
-  let out=[];
-  for(const z of matched){
-    if(out.length>=30)break;
-    let name=z.fstvlNm||z.festivalNm||z.eventNm||z.name,a=z.rdnmadr||z.roadNmAddr||z.lnmadr||z.address||'';
-    if(!name)continue;
-    let t={x:num(z.longitude||z.lon||z.x),y:num(z.latitude||z.lat||z.y)};
-    if(t.x==null||t.y==null)t=await geocode(a);
-    if(!t)continue;
-    let rr=await route(o,t);
-    if(!rr||rr.minutes>max)continue;
-    out.push({id:`festival:${name}:${d8(z.fstvlStartDate||z.eventStartDate)}`,name,category:'지역축제',address:a,road_address:a,phone:z.phoneNumber||z.phone||'',place_url:z.homepageUrl||z.homepage||'',x:t.x,y:t.y,route_minutes:rr.minutes,route_distance:rr.distance,route_estimated:false,event_start:z.fstvlStartDate||z.eventStartDate||'',event_end:z.fstvlEndDate||z.eventEndDate||'',festival:true,festival_period:`${z.fstvlStartDate||z.eventStartDate||''} ~ ${z.fstvlEndDate||z.eventEndDate||''}`,season_kind:'festival'});
-  }
-  console.log('[festival result]',JSON.stringify({count:out.length,names:out.slice(0,8).map(x=>x.name)}));
-  return out;
+const CORE_SOURCE_URL =
+  "https://raw.githubusercontent.com/jmtghbd67p-commits/56wan/94e0a945245fbdc87caf1c0152cc81f6c8dc0940/api/app.js";
+const FESTIVAL_API = "https://api.data.go.kr/openapi/tn_pubr_public_cltur_fstvl_api";
+const KAKAO = process.env.KAKAO_REST_KEY;
+const FESTIVAL_KEY = process.env.CULTURE_DATA_SERVICE_KEY;
+
+let coreHandlerPromise;
+
+function uniqueStrings(values) {
+  return [...new Set((values || []).filter(Boolean).map(v => String(v).trim()))];
 }
-module.exports=async(req,res)=>{try{
-  let u=new URL(req.url,'http://local'),b={};
-  if(req.method!=='GET'){
-    if(req.body&&typeof req.body==='object')b=req.body;
-    else{let s='';for await(const c of req)s+=c;try{b=JSON.parse(s||'{}')}catch{}}
+
+function serviceKeyVariants() {
+  let raw = String(FESTIVAL_KEY || "").trim()
+    .replace(/^serviceKey\s*=\s*/i, "")
+    .replace(/^['"]|['"]$/g, "");
+  if (!raw) return [];
+  const values = [raw];
+  let current = raw;
+  for (let i = 0; i < 2; i += 1) {
+    try {
+      const next = decodeURIComponent(current);
+      if (next === current) break;
+      values.push(next);
+      current = next;
+    } catch { break; }
   }
-  let r=await fetch(UPSTREAM+u.pathname+u.search,{method:req.method||'GET',headers:{accept:'application/json','content-type':'application/json'},body:req.method==='GET'||req.method==='HEAD'?undefined:JSON.stringify(b)}),j=await r.json().catch(()=>({ok:false,error:'추천 정보를 불러오지 못했습니다.'}));
-  let mode=u.searchParams.get('mode')||b.mode||'';
-  let theme=u.searchParams.get('theme')||b.theme||'';
-  let themes=String(u.searchParams.get('themes')||b.themes||theme||'').split(',').map(x=>x.trim()).filter(Boolean);
-  if(r.ok&&j?.ok&&mode==='theme'&&themes.includes('season')){
-    let x=num(u.searchParams.get('x')||b.x),y=num(u.searchParams.get('y')||b.y),max=Math.max(10,Math.min(120,num(u.searchParams.get('maxMinutes')||b.maxMinutes)||40));
-    let extra=await festivals(x!=null&&y!=null?{x,y}:null,max,selected(u.searchParams,b)),old=Array.isArray(j.items)?j.items:[],seen=new Set(old.map(v=>String(v.name||'').replace(/\s/g,'')));
-    j.items=[...extra.filter(v=>!seen.has(String(v.name).replace(/\s/g,''))),...old].sort((a,b)=>(a.route_minutes||999)-(b.route_minutes||999));
+  return uniqueStrings(values);
+}
+
+async function loadCoreHandler() {
+  if (!coreHandlerPromise) {
+    coreHandlerPromise = (async () => {
+      const response = await fetch(CORE_SOURCE_URL, { cache: "force-cache" });
+      if (!response.ok) throw new Error(`정상 백엔드 원본 로드 실패 ${response.status}`);
+      const source = await response.text();
+      const mod = { exports: {} };
+      const runner = new Function(
+        "module","exports","require","process","fetch","URL","URLSearchParams",
+        "AbortController","Buffer","console","setTimeout","clearTimeout",
+        source
+      );
+      runner(
+        mod, mod.exports, require, process, fetch, URL, URLSearchParams,
+        AbortController, Buffer, console, setTimeout, clearTimeout
+      );
+      if (typeof mod.exports !== "function") throw new Error("정상 백엔드 핸들러를 읽지 못했습니다.");
+      return mod.exports;
+    })().catch(error => {
+      coreHandlerPromise = null;
+      throw error;
+    });
   }
-  res.statusCode=r.status;res.setHeader('content-type','application/json; charset=utf-8');res.setHeader('cache-control','no-store');res.end(JSON.stringify(j));
-}catch(e){console.error('[app-proxy]',e?.stack||e?.message||String(e));res.statusCode=500;res.setHeader('content-type','application/json; charset=utf-8');res.end(JSON.stringify({ok:false,error:e?.message||'추천 정보를 불러오지 못했습니다.'}))}};
+  return coreHandlerPromise;
+}
+
+function queryInfo(req) {
+  const url = new URL(req.url, "http://local");
+  const get = key => req.query?.[key] ?? url.searchParams.get(key) ?? "";
+  const themes = String(get("themes") || get("theme") || "")
+    .split(",").map(v => v.trim()).filter(Boolean);
+  return {
+    mode: String(get("mode") || ""),
+    themes,
+    visitDate: String(get("visitDate") || ""),
+    x: Number(get("x")),
+    y: Number(get("y")),
+    maxMinutes: Math.max(10, Math.min(120, Number(get("maxMinutes")) || 40))
+  };
+}
+
+function digits8(value) {
+  return String(value || "").replace(/\D/g, "").slice(0, 8);
+}
+
+function rowsFrom(data) {
+  const x =
+    data?.response?.body?.items?.item ??
+    data?.response?.body?.items ??
+    data?.items?.item ??
+    data?.items ??
+    [];
+  return Array.isArray(x) ? x : (x && typeof x === "object" ? [x] : []);
+}
+
+function recordValue(record, names) {
+  for (const name of names) {
+    const key = Object.keys(record || {}).find(k => k.toLowerCase() === name.toLowerCase());
+    if (key != null && record[key] != null) return String(record[key]).trim();
+  }
+  return "";
+}
+
+function activeOn(record, target) {
+  const start = digits8(recordValue(record, ["fstvlStartDate","eventStartDate","startDate"]));
+  const end = digits8(recordValue(record, ["fstvlEndDate","eventEndDate","endDate"])) || start;
+  if (!target || !start) return true;
+  return start <= target && target <= end;
+}
+
+async function geocode(address) {
+  if (!KAKAO || !address) return null;
+  const response = await fetch(
+    `https://dapi.kakao.com/v2/local/search/address.json?${new URLSearchParams({query:address,size:"1"})}`,
+    { headers: { Authorization: `KakaoAK ${KAKAO}` } }
+  );
+  const data = await response.json().catch(() => ({}));
+  const item = data?.documents?.[0];
+  if (!item) return null;
+  return { x: Number(item.x), y: Number(item.y) };
+}
+
+async function route(origin, target) {
+  if (!KAKAO || !origin || !target) return null;
+  const params = new URLSearchParams({
+    origin: `${origin.x},${origin.y}`,
+    destination: `${target.x},${target.y}`,
+    priority: "TIME",
+    alternatives: "false",
+    road_details: "false"
+  });
+  const response = await fetch(
+    `https://apis-navi.kakaomobility.com/v1/directions?${params}`,
+    { headers: { Authorization: `KakaoAK ${KAKAO}` } }
+  );
+  const data = await response.json().catch(() => ({}));
+  const summary = data?.routes?.[0]?.summary;
+  if (!summary || !Number.isFinite(Number(summary.duration))) return null;
+  return {
+    minutes: Math.max(1, Math.round(Number(summary.duration) / 60)),
+    distance: Number(summary.distance) || 0
+  };
+}
+
+async function fetchFestivalRows() {
+  if (!FESTIVAL_KEY) return [];
+  let last = "";
+  for (const serviceKey of serviceKeyVariants()) {
+    const params = new URLSearchParams({
+      serviceKey,
+      pageNo: "1",
+      numOfRows: "1000",
+      type: "json"
+    });
+    const response = await fetch(`${FESTIVAL_API}?${params}`, { cache: "no-store" });
+    const text = await response.text();
+    last = text.slice(0, 180);
+    let data = null;
+    try { data = JSON.parse(text); } catch {}
+    const rows = data ? rowsFrom(data) : [];
+    if (response.ok && rows.length) {
+      console.log("[festival api]", JSON.stringify({ status: response.status, total: rows.length }));
+      return rows;
+    }
+  }
+  console.warn("[festival api empty]", last);
+  return [];
+}
+
+async function festivalItems(origin, maxMinutes, visitDate) {
+  const targetDate = digits8(visitDate);
+  const rows = (await fetchFestivalRows()).filter(row => activeOn(row, targetDate));
+  const results = [];
+  for (const row of rows) {
+    const name = recordValue(row, ["fstvlNm","festivalNm","eventNm","name"]);
+    if (!name) continue;
+    const address = recordValue(row, ["rdnmadr","roadNmAddr","lnmadr","address"]);
+    let x = Number(recordValue(row, ["longitude","lon","x"]));
+    let y = Number(recordValue(row, ["latitude","lat","y"]));
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      const point = await geocode(address);
+      if (!point) continue;
+      x = point.x; y = point.y;
+    }
+    const routed = await route(origin, {x,y});
+    if (!routed || routed.minutes > maxMinutes) continue;
+    const start = recordValue(row, ["fstvlStartDate","eventStartDate","startDate"]);
+    const end = recordValue(row, ["fstvlEndDate","eventEndDate","endDate"]);
+    results.push({
+      id: `festival:${name}:${digits8(start)}`,
+      name,
+      display_name: name,
+      category: "지역축제",
+      address,
+      road_address: address,
+      phone: recordValue(row, ["phoneNumber","phone"]),
+      place_url: recordValue(row, ["homepageUrl","homepage"]),
+      x, y,
+      route_minutes: routed.minutes,
+      route_distance: routed.distance,
+      route_estimated: false,
+      family_evidence: 999,
+      festival: true,
+      festival_period: [start,end].filter(Boolean).join(" ~ "),
+      festival_start: start,
+      festival_end: end,
+      season_kind: "festival",
+      matched_themes: ["season"]
+    });
+  }
+  results.sort((a,b) => a.route_minutes - b.route_minutes);
+  console.log("[festival result]", JSON.stringify({
+    date: targetDate, count: results.length, names: results.slice(0,10).map(x=>x.name)
+  }));
+  return results.slice(0, 10);
+}
+
+function captureResponse() {
+  const headers = new Map();
+  let statusCode = 200;
+  let body = "";
+  return {
+    set statusCode(v) { statusCode = v; },
+    get statusCode() { return statusCode; },
+    setHeader(k,v) { headers.set(String(k).toLowerCase(), String(v)); },
+    getHeader(k) { return headers.get(String(k).toLowerCase()); },
+    end(v="") { body += v == null ? "" : String(v); },
+    write(v="") { body += v == null ? "" : String(v); },
+    snapshot() { return { statusCode, headers, body }; }
+  };
+}
+
+module.exports = async function handler(req, res) {
+  try {
+    const core = await loadCoreHandler();
+    const info = queryInfo(req);
+
+    if (info.mode !== "theme" || !info.themes.includes("season")) {
+      return core(req, res);
+    }
+
+    const captured = captureResponse();
+    await core(req, captured);
+    const snap = captured.snapshot();
+
+    let data;
+    try { data = JSON.parse(snap.body || "{}"); }
+    catch {
+      res.statusCode = snap.statusCode;
+      for (const [k,v] of snap.headers) res.setHeader(k,v);
+      return res.end(snap.body);
+    }
+
+    if (snap.statusCode >= 200 && snap.statusCode < 300 && data?.ok &&
+        Number.isFinite(info.x) && Number.isFinite(info.y)) {
+      try {
+        const extra = await festivalItems(
+          {x:info.x,y:info.y}, info.maxMinutes, info.visitDate
+        );
+        const existing = Array.isArray(data.items) ? data.items : [];
+        const seen = new Set(existing.map(x => String(x.name || x.display_name || "").replace(/\s/g,"")));
+        const festivals = extra.filter(x => !seen.has(String(x.name).replace(/\s/g,"")));
+        data.items = [...festivals, ...existing].slice(0, 10);
+        data.hasMore = Boolean(data.hasMore || festivals.length + existing.length > 10);
+      } catch (error) {
+        console.warn("[festival merge skipped]", error?.stack || error?.message || String(error));
+      }
+    }
+
+    res.statusCode = snap.statusCode;
+    res.setHeader("Content-Type","application/json; charset=utf-8");
+    res.setHeader("Cache-Control","no-store");
+    return res.end(JSON.stringify(data));
+  } catch (error) {
+    console.error("[api/app wrapper]", error?.stack || error?.message || String(error));
+    res.statusCode = 500;
+    res.setHeader("Content-Type","application/json; charset=utf-8");
+    res.setHeader("Cache-Control","no-store");
+    return res.end(JSON.stringify({
+      ok:false,
+      error:error?.message || "추천 정보를 불러오지 못했습니다."
+    }));
+  }
+};
