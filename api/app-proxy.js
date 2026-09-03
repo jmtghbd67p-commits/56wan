@@ -7,5 +7,42 @@ function rows(j){let x=j?.response?.body?.items?.item||j?.response?.body?.items|
 function active(r,d){let s=d8(r.fstvlStartDate||r.eventStartDate||r.startDate),e=d8(r.fstvlEndDate||r.eventEndDate||r.endDate||s);return !d||!s||(s<=d&&d<=(e||s))}
 async function geocode(a){if(!KAKAO||!a)return null;let r=await fetch(`https://dapi.kakao.com/v2/local/search/address.json?query=${encodeURIComponent(a)}`,{headers:{Authorization:`KakaoAK ${KAKAO}`}}),j=await r.json().catch(()=>({})),x=j?.documents?.[0];return x?{x:+x.x,y:+x.y}:null}
 async function route(o,t){if(!KAKAO||!o||!t)return null;let q=new URLSearchParams({origin:`${o.x},${o.y}`,destination:`${t.x},${t.y}`,priority:'TIME'}),r=await fetch(`https://apis-navi.kakaomobility.com/v1/directions?${q}`,{headers:{Authorization:`KakaoAK ${KAKAO}`}}),j=await r.json().catch(()=>({})),s=j?.routes?.[0]?.summary;return s?{minutes:Math.max(1,Math.round(s.duration/60)),distance:s.distance}:null}
-async function festivals(o,max,date){if(!SERVICE_KEY||!o)return[];let q=new URLSearchParams({serviceKey:key(SERVICE_KEY),pageNo:'1',numOfRows:'1000',type:'json'}),r=await fetch(`${FESTIVAL_API}?${q}`),j=await r.json().catch(()=>({})),out=[];for(const z of rows(j).filter(x=>active(x,date))){if(out.length>=20)break;let name=z.fstvlNm||z.festivalNm||z.eventNm||z.name,a=z.rdnmadr||z.roadNmAddr||z.lnmadr||z.address||'';if(!name)continue;let t={x:num(z.longitude||z.lon||z.x),y:num(z.latitude||z.lat||z.y)};if(t.x==null||t.y==null)t=await geocode(a);if(!t)continue;let rr=await route(o,t);if(!rr||rr.minutes>max)continue;out.push({id:`festival:${name}:${d8(z.fstvlStartDate||z.eventStartDate)}`,name,category:'지역축제',address:a,road_address:a,phone:z.phoneNumber||z.phone||'',place_url:z.homepageUrl||z.homepage||'',x:t.x,y:t.y,route_minutes:rr.minutes,route_distance:rr.distance,route_estimated:false,event_start:z.fstvlStartDate||z.eventStartDate||'',event_end:z.fstvlEndDate||z.eventEndDate||'',season_kind:'festival'})}return out}
-module.exports=async(req,res)=>{try{let u=new URL(req.url,'http://local'),b={};if(req.method!=='GET'){if(req.body&&typeof req.body==='object')b=req.body;else{let s='';for await(const c of req)s+=c;try{b=JSON.parse(s||'{}')}catch{}}}let r=await fetch(UPSTREAM+u.pathname+u.search,{method:req.method||'GET',headers:{accept:'application/json','content-type':'application/json'},body:req.method==='GET'||req.method==='HEAD'?undefined:JSON.stringify(b)}),j=await r.json().catch(()=>({ok:false,error:'추천 정보를 불러오지 못했습니다.'}));let mode=u.searchParams.get('mode')||b.mode,theme=u.searchParams.get('theme')||b.theme;if(r.ok&&j?.ok&&mode==='theme'&&theme==='season'){let x=num(u.searchParams.get('x')||b.x),y=num(u.searchParams.get('y')||b.y),max=Math.max(10,Math.min(120,num(u.searchParams.get('maxMinutes')||b.maxMinutes)||40)),extra=await festivals(x!=null&&y!=null?{x,y}:null,max,selected(u.searchParams,b)),old=Array.isArray(j.items)?j.items:[],seen=new Set(old.map(v=>String(v.name||'').replace(/\s/g,'')));j.items=[...extra.filter(v=>!seen.has(String(v.name).replace(/\s/g,''))),...old].sort((a,b)=>(a.route_minutes||999)-(b.route_minutes||999))}res.statusCode=r.status;res.setHeader('content-type','application/json; charset=utf-8');res.setHeader('cache-control','no-store');res.end(JSON.stringify(j))}catch(e){res.statusCode=500;res.setHeader('content-type','application/json; charset=utf-8');res.end(JSON.stringify({ok:false,error:e?.message||'추천 정보를 불러오지 못했습니다.'}))}};
+async function festivals(o,max,date){
+  if(!SERVICE_KEY||!o){console.log('[festival skip]',JSON.stringify({serviceKey:!!SERVICE_KEY,origin:!!o}));return[]}
+  let q=new URLSearchParams({serviceKey:key(SERVICE_KEY),pageNo:'1',numOfRows:'1000',type:'json'});
+  let r=await fetch(`${FESTIVAL_API}?${q}`),text=await r.text(),j={};
+  try{j=JSON.parse(text)}catch{}
+  const all=rows(j), matched=all.filter(x=>active(x,date));
+  console.log('[festival api]',JSON.stringify({status:r.status,total:all.length,date,active:matched.length,body:all.length?'ok':text.slice(0,180)}));
+  let out=[];
+  for(const z of matched){
+    if(out.length>=30)break;
+    let name=z.fstvlNm||z.festivalNm||z.eventNm||z.name,a=z.rdnmadr||z.roadNmAddr||z.lnmadr||z.address||'';
+    if(!name)continue;
+    let t={x:num(z.longitude||z.lon||z.x),y:num(z.latitude||z.lat||z.y)};
+    if(t.x==null||t.y==null)t=await geocode(a);
+    if(!t)continue;
+    let rr=await route(o,t);
+    if(!rr||rr.minutes>max)continue;
+    out.push({id:`festival:${name}:${d8(z.fstvlStartDate||z.eventStartDate)}`,name,category:'지역축제',address:a,road_address:a,phone:z.phoneNumber||z.phone||'',place_url:z.homepageUrl||z.homepage||'',x:t.x,y:t.y,route_minutes:rr.minutes,route_distance:rr.distance,route_estimated:false,event_start:z.fstvlStartDate||z.eventStartDate||'',event_end:z.fstvlEndDate||z.eventEndDate||'',festival:true,festival_period:`${z.fstvlStartDate||z.eventStartDate||''} ~ ${z.fstvlEndDate||z.eventEndDate||''}`,season_kind:'festival'});
+  }
+  console.log('[festival result]',JSON.stringify({count:out.length,names:out.slice(0,8).map(x=>x.name)}));
+  return out;
+}
+module.exports=async(req,res)=>{try{
+  let u=new URL(req.url,'http://local'),b={};
+  if(req.method!=='GET'){
+    if(req.body&&typeof req.body==='object')b=req.body;
+    else{let s='';for await(const c of req)s+=c;try{b=JSON.parse(s||'{}')}catch{}}
+  }
+  let r=await fetch(UPSTREAM+u.pathname+u.search,{method:req.method||'GET',headers:{accept:'application/json','content-type':'application/json'},body:req.method==='GET'||req.method==='HEAD'?undefined:JSON.stringify(b)}),j=await r.json().catch(()=>({ok:false,error:'추천 정보를 불러오지 못했습니다.'}));
+  let mode=u.searchParams.get('mode')||b.mode||'';
+  let theme=u.searchParams.get('theme')||b.theme||'';
+  let themes=String(u.searchParams.get('themes')||b.themes||theme||'').split(',').map(x=>x.trim()).filter(Boolean);
+  if(r.ok&&j?.ok&&mode==='theme'&&themes.includes('season')){
+    let x=num(u.searchParams.get('x')||b.x),y=num(u.searchParams.get('y')||b.y),max=Math.max(10,Math.min(120,num(u.searchParams.get('maxMinutes')||b.maxMinutes)||40));
+    let extra=await festivals(x!=null&&y!=null?{x,y}:null,max,selected(u.searchParams,b)),old=Array.isArray(j.items)?j.items:[],seen=new Set(old.map(v=>String(v.name||'').replace(/\s/g,'')));
+    j.items=[...extra.filter(v=>!seen.has(String(v.name).replace(/\s/g,''))),...old].sort((a,b)=>(a.route_minutes||999)-(b.route_minutes||999));
+  }
+  res.statusCode=r.status;res.setHeader('content-type','application/json; charset=utf-8');res.setHeader('cache-control','no-store');res.end(JSON.stringify(j));
+}catch(e){console.error('[app-proxy]',e?.stack||e?.message||String(e));res.statusCode=500;res.setHeader('content-type','application/json; charset=utf-8');res.end(JSON.stringify({ok:false,error:e?.message||'추천 정보를 불러오지 못했습니다.'}))}};
