@@ -1,6 +1,6 @@
 const CORE_SOURCE_URL =
   "https://raw.githubusercontent.com/jmtghbd67p-commits/56wan/94e0a945245fbdc87caf1c0152cc81f6c8dc0940/api/app.js";
-const FESTIVAL_API = "https://api.data.go.kr/openapi/tn_pubr_public_cltur_fstvl_api";
+const FESTIVAL_API = "https://apis.data.go.kr/B551011/KorService2/searchFestival2";
 const KAKAO = process.env.KAKAO_REST_KEY;
 const FESTIVAL_KEY = process.env.CULTURE_DATA_SERVICE_KEY;
 const SIGUNGU_GRAPH = require("./sigungu-graph");
@@ -58,11 +58,12 @@ async function loadCoreHandler() {
 
 function queryInfo(req) {
   const url = new URL(req.url, "http://local");
-  const get = key => req.query?.[key] ?? url.searchParams.get(key) ?? "";
+  const body = req.body && typeof req.body === "object" ? req.body : {};
+  const get = key => body[key] ?? req.query?.[key] ?? url.searchParams.get(key) ?? "";
   const themes = String(get("themes") || get("theme") || "")
     .split(",").map(v => v.trim()).filter(Boolean);
   return {
-    mode: String(get("mode") || ""),
+    mode: String(req.query?.mode ?? url.searchParams.get("mode") ?? ""),
     themes,
     visitDate: String(get("visitDate") || ""),
     x: Number(get("x")),
@@ -94,8 +95,8 @@ function recordValue(record, names) {
 }
 
 function activeOn(record, target) {
-  const start = digits8(recordValue(record, ["fstvlStartDate","eventStartDate","startDate"]));
-  const end = digits8(recordValue(record, ["fstvlEndDate","eventEndDate","endDate"])) || start;
+  const start = digits8(recordValue(record, ["eventstartdate","fstvlStartDate","eventStartDate","startDate"]));
+  const end = digits8(recordValue(record, ["eventenddate","fstvlEndDate","eventEndDate","endDate"])) || start;
   if (!target || !start) return true;
   return start <= target && target <= end;
 }
@@ -134,41 +135,50 @@ async function route(origin, target) {
   };
 }
 
-async function fetchFestivalRows() {
+async function fetchFestivalRows(visitDate) {
   if (!FESTIVAL_KEY) return [];
+  const target = digits8(visitDate) || new Date().toISOString().slice(0,10).replace(/-/g,"");
   let last = "";
   for (const serviceKey of serviceKeyVariants()) {
     const params = new URLSearchParams({
       serviceKey,
+      MobileOS: "ETC",
+      MobileApp: "56wan",
+      _type: "json",
+      numOfRows: "500",
       pageNo: "1",
-      numOfRows: "1000",
-      type: "json"
+      arrange: "A",
+      eventStartDate: target
     });
     const response = await fetch(`${FESTIVAL_API}?${params}`, { cache: "no-store" });
     const text = await response.text();
-    last = text.slice(0, 180);
+    last = text.slice(0, 240);
     let data = null;
     try { data = JSON.parse(text); } catch {}
     const rows = data ? rowsFrom(data) : [];
-    if (response.ok && rows.length) {
-      console.log("[festival api]", JSON.stringify({ status: response.status, total: rows.length }));
+    if (response.ok && data?.response?.header?.resultCode === "0000") {
+      console.log("[tourapi festival]", JSON.stringify({
+        status: response.status,
+        total: Number(data?.response?.body?.totalCount || rows.length),
+        returned: rows.length,
+        date: target
+      }));
       return rows;
     }
   }
-  console.warn("[festival api empty]", last);
+  console.warn("[tourapi festival empty]", last);
   return [];
 }
-
 async function festivalItems(origin, maxMinutes, visitDate) {
   const targetDate = digits8(visitDate);
-  const rows = (await fetchFestivalRows()).filter(row => activeOn(row, targetDate));
+  const rows = (await fetchFestivalRows(targetDate)).filter(row => activeOn(row, targetDate));
   const results = [];
   for (const row of rows) {
-    const name = recordValue(row, ["fstvlNm","festivalNm","eventNm","name"]);
+    const name = recordValue(row, ["title","fstvlNm","festivalNm","eventNm","name"]);
     if (!name) continue;
-    const address = recordValue(row, ["rdnmadr","roadNmAddr","lnmadr","address"]);
-    let x = Number(recordValue(row, ["longitude","lon","x"]));
-    let y = Number(recordValue(row, ["latitude","lat","y"]));
+    const address = [recordValue(row, ["addr1","rdnmadr","roadNmAddr","lnmadr","address"]), recordValue(row, ["addr2"])].filter(Boolean).join(" ");
+    let x = Number(recordValue(row, ["mapx","longitude","lon","x"]));
+    let y = Number(recordValue(row, ["mapy","latitude","lat","y"]));
     if (!Number.isFinite(x) || !Number.isFinite(y)) {
       const point = await geocode(address);
       if (!point) continue;
@@ -176,8 +186,8 @@ async function festivalItems(origin, maxMinutes, visitDate) {
     }
     const routed = await route(origin, {x,y});
     if (!routed || routed.minutes > maxMinutes) continue;
-    const start = recordValue(row, ["fstvlStartDate","eventStartDate","startDate"]);
-    const end = recordValue(row, ["fstvlEndDate","eventEndDate","endDate"]);
+    const start = recordValue(row, ["eventstartdate","fstvlStartDate","eventStartDate","startDate"]);
+    const end = recordValue(row, ["eventenddate","fstvlEndDate","eventEndDate","endDate"]);
     results.push({
       id: `festival:${name}:${digits8(start)}`,
       name,
@@ -185,8 +195,8 @@ async function festivalItems(origin, maxMinutes, visitDate) {
       category: "지역축제",
       address,
       road_address: address,
-      phone: recordValue(row, ["phoneNumber","phone"]),
-      place_url: recordValue(row, ["homepageUrl","homepage"]),
+      phone: recordValue(row, ["tel","phoneNumber","phone"]),
+      place_url: "",
       x, y,
       route_minutes: routed.minutes,
       route_distance: routed.distance,
