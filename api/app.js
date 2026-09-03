@@ -1,6 +1,6 @@
 const CORE_SOURCE_URL =
   "https://raw.githubusercontent.com/jmtghbd67p-commits/56wan/94e0a945245fbdc87caf1c0152cc81f6c8dc0940/api/app.js";
-const FESTIVAL_API = "https://apis.data.go.kr/B551011/KorService2/searchFestival2";
+const FESTIVAL_API = "https://api.data.go.kr/openapi/tn_pubr_public_cltur_fstvl_api";
 const KAKAO = process.env.KAKAO_REST_KEY;
 const FESTIVAL_KEY = process.env.CULTURE_DATA_SERVICE_KEY;
 const SIGUNGU_GRAPH = require("./sigungu-graph");
@@ -58,12 +58,11 @@ async function loadCoreHandler() {
 
 function queryInfo(req) {
   const url = new URL(req.url, "http://local");
-  const body = req.body && typeof req.body === "object" ? req.body : {};
-  const get = key => body[key] ?? req.query?.[key] ?? url.searchParams.get(key) ?? "";
+  const get = key => req.query?.[key] ?? url.searchParams.get(key) ?? "";
   const themes = String(get("themes") || get("theme") || "")
     .split(",").map(v => v.trim()).filter(Boolean);
   return {
-    mode: String(req.query?.mode ?? url.searchParams.get("mode") ?? ""),
+    mode: String(get("mode") || ""),
     themes,
     visitDate: String(get("visitDate") || ""),
     x: Number(get("x")),
@@ -95,8 +94,8 @@ function recordValue(record, names) {
 }
 
 function activeOn(record, target) {
-  const start = digits8(recordValue(record, ["eventstartdate","fstvlStartDate","eventStartDate","startDate"]));
-  const end = digits8(recordValue(record, ["eventenddate","fstvlEndDate","eventEndDate","endDate"])) || start;
+  const start = digits8(recordValue(record, ["fstvlStartDate","eventStartDate","startDate"]));
+  const end = digits8(recordValue(record, ["fstvlEndDate","eventEndDate","endDate"])) || start;
   if (!target || !start) return true;
   return start <= target && target <= end;
 }
@@ -135,48 +134,137 @@ async function route(origin, target) {
   };
 }
 
-async function fetchFestivalRows(visitDate) {
+async function fetchFestivalRows() {
   if (!FESTIVAL_KEY) return [];
-  const target = digits8(visitDate) || new Date().toISOString().slice(0,10).replace(/-/g,"");
   let last = "";
   for (const serviceKey of serviceKeyVariants()) {
     const params = new URLSearchParams({
       serviceKey,
-      MobileOS: "ETC",
-      MobileApp: "56wan",
-      _type: "json",
-      numOfRows: "500",
       pageNo: "1",
-      arrange: "A",
-      eventStartDate: target
+      numOfRows: "1000",
+      type: "json"
     });
     const response = await fetch(`${FESTIVAL_API}?${params}`, { cache: "no-store" });
     const text = await response.text();
-    last = text.slice(0, 240);
+    last = text.slice(0, 180);
     let data = null;
     try { data = JSON.parse(text); } catch {}
     const rows = data ? rowsFrom(data) : [];
-    if (response.ok && data?.response?.header?.resultCode === "0000") {
-      console.log("[tourapi festival]", JSON.stringify({
-        status: response.status,
-        total: Number(data?.response?.body?.totalCount || rows.length),
-        returned: rows.length,
-        date: target
-      }));
+    if (response.ok && rows.length) {
+      console.log("[festival api]", JSON.stringify({ status: response.status, total: rows.length }));
       return rows;
     }
   }
-  console.warn("[tourapi festival empty]", last);
+  console.warn("[festival api empty]", last);
   return [];
 }
+
+function regionTokens(text) {
+  const t = String(text || "")
+    .replace(/전남광주통합특별시/g, "전라남도")
+    .replace(/전남특별자치도/g, "전라남도")
+    .replace(/전남/g, "전라남도")
+    .replace(/광주광역시/g, "광주")
+    .replace(/\s+/g, " ")
+    .trim();
+  const m = t.match(/(전라남도|전라북도|광주|서울|부산|대구|인천|대전|울산|세종|경기도|강원(?:특별자치도|도)?|충청북도|충청남도|경상북도|경상남도|제주(?:특별자치도)?)[ ]+([가-힣]+(?:시|군|구))/);
+  return m ? { province: m[1], district: m[2] } : null;
+}
+function normRegionName(v) {
+  return String(v || "")
+    .replace(/전남광주통합특별시/g, "전라남도")
+    .replace(/전남특별자치도/g, "전라남도")
+    .replace(/^전남(?=\s)/g, "전라남도")
+    .replace(/강원특별자치도/g, "강원도")
+    .replace(/제주특별자치도/g, "제주도")
+    .replace(/\s+/g, "")
+    .trim();
+}
+async function originAdministrativeRegion(origin) {
+  if (!KAKAO || !origin) return null;
+  const params = new URLSearchParams({ x: String(origin.x), y: String(origin.y) });
+  const response = await fetch(
+    `https://dapi.kakao.com/v2/local/geo/coord2regioncode.json?${params}`,
+    { headers: { Authorization: `KakaoAK ${KAKAO}` } }
+  );
+  const data = await response.json().catch(() => ({}));
+  const row = (data?.documents || []).find(x => x.region_type === "H") || data?.documents?.[0];
+  if (!row) return null;
+  return {
+    province: row.region_1depth_name || "",
+    district: row.region_2depth_name || "",
+    label: `${row.region_1depth_name || ""} ${row.region_2depth_name || ""}`.trim()
+  };
+}
+function graphKeyFor(region) {
+  if (!region) return null;
+  const wantedDistrict = normRegionName(region.district);
+  const wantedProvince = normRegionName(region.province);
+  const keys = Object.keys(SIGUNGU_GRAPH || {});
+  return keys.find(k => {
+    const n = normRegionName(k);
+    return n.includes(wantedDistrict) && (!wantedProvince || n.includes(wantedProvince));
+  }) || keys.find(k => normRegionName(k).includes(wantedDistrict)) || null;
+}
+function allowedGraphRegions(region, maxMinutes) {
+  const start = graphKeyFor(region);
+  if (!start) return [];
+  const depthLimit = maxMinutes <= 40 ? 1 : 2;
+  const seen = new Set([start]);
+  let frontier = [start];
+  for (let depth = 0; depth < depthLimit; depth += 1) {
+    const next = [];
+    for (const key of frontier) {
+      const neighbors = Array.isArray(SIGUNGU_GRAPH?.[key]) ? SIGUNGU_GRAPH[key] : [];
+      for (const n of neighbors) {
+        if (!seen.has(n)) { seen.add(n); next.push(n); }
+      }
+    }
+    frontier = next;
+    if (!frontier.length) break;
+  }
+  return [...seen];
+}
+function festivalInAllowedRegion(row, allowed) {
+  if (!allowed?.length) return true;
+  const address = [recordValue(row, ["addr1","rdnmadr","roadNmAddr","lnmadr","address"]), recordValue(row, ["addr2"])].filter(Boolean).join(" ");
+  const n = normRegionName(address);
+  return allowed.some(r => {
+    const rt = regionTokens(String(r).replace(/([가-힣]+(?:시|군|구))$/, " $1"));
+    const district = rt?.district || String(r).match(/([가-힣]+(?:시|군|구))$/)?.[1] || "";
+    return district && n.includes(normRegionName(district));
+  });
+}
+
 async function festivalItems(origin, maxMinutes, visitDate) {
   const targetDate = digits8(visitDate);
-  const rows = (await fetchFestivalRows(targetDate)).filter(row => activeOn(row, targetDate));
-  const results = [];
+  const [allRows, originRegion] = await Promise.all([
+    fetchFestivalRows(targetDate),
+    originAdministrativeRegion(origin)
+  ]);
+  const allowed = allowedGraphRegions(originRegion, maxMinutes);
+  const rows = allRows
+    .filter(row => activeOn(row, targetDate))
+    .filter(row => festivalInAllowedRegion(row, allowed));
+
+  console.log("[festival region filter]", JSON.stringify({
+    origin: originRegion?.label || "",
+    maxMinutes,
+    allowedCount: allowed.length,
+    allowed: allowed.slice(0, 20),
+    before: allRows.length,
+    after: rows.length
+  }));
+
+  const candidates = [];
   for (const row of rows) {
     const name = recordValue(row, ["title","fstvlNm","festivalNm","eventNm","name"]);
     if (!name) continue;
-    const address = [recordValue(row, ["addr1","rdnmadr","roadNmAddr","lnmadr","address"]), recordValue(row, ["addr2"])].filter(Boolean).join(" ");
+    const address = [
+      recordValue(row, ["addr1","rdnmadr","roadNmAddr","lnmadr","address"]),
+      recordValue(row, ["addr2"])
+    ].filter(Boolean).join(" ");
+
     let x = Number(recordValue(row, ["mapx","longitude","lon","x"]));
     let y = Number(recordValue(row, ["mapy","latitude","lat","y"]));
     if (!Number.isFinite(x) || !Number.isFinite(y)) {
@@ -184,22 +272,37 @@ async function festivalItems(origin, maxMinutes, visitDate) {
       if (!point) continue;
       x = point.x; y = point.y;
     }
-    const routed = await route(origin, {x,y});
-    if (!routed || routed.minutes > maxMinutes) continue;
-    const start = recordValue(row, ["eventstartdate","fstvlStartDate","eventStartDate","startDate"]);
-    const end = recordValue(row, ["eventenddate","fstvlEndDate","eventEndDate","endDate"]);
+
+    const dx = (x - origin.x) * Math.cos(origin.y * Math.PI / 180);
+    const dy = y - origin.y;
+    const straightKm = Math.sqrt(dx*dx + dy*dy) * 111;
+    candidates.push({ row, name, address, x, y, straightKm });
+  }
+
+  candidates.sort((a,b) => a.straightKm - b.straightKm);
+
+  // 지역+인접 시군구로 이미 줄였으므로, 이 후보들에 대해서만 실제 차량시간을 확인한다.
+  const routed = await Promise.all(
+    candidates.slice(0, 30).map(async c => ({ ...c, route: await route(origin, {x:c.x,y:c.y}) }))
+  );
+
+  const results = [];
+  for (const c of routed) {
+    if (!c.route || c.route.minutes > maxMinutes) continue;
+    const start = recordValue(c.row, ["eventstartdate","fstvlStartDate","eventStartDate","startDate"]);
+    const end = recordValue(c.row, ["eventenddate","fstvlEndDate","eventEndDate","endDate"]);
     results.push({
-      id: `festival:${name}:${digits8(start)}`,
-      name,
-      display_name: name,
+      id: `festival:${c.name}:${digits8(start)}`,
+      name: c.name,
+      display_name: c.name,
       category: "지역축제",
-      address,
-      road_address: address,
-      phone: recordValue(row, ["tel","phoneNumber","phone"]),
+      address: c.address,
+      road_address: c.address,
+      phone: recordValue(c.row, ["tel","phoneNumber","phone"]),
       place_url: "",
-      x, y,
-      route_minutes: routed.minutes,
-      route_distance: routed.distance,
+      x: c.x, y: c.y,
+      route_minutes: c.route.minutes,
+      route_distance: c.route.distance,
       route_estimated: false,
       family_evidence: 999,
       festival: true,
@@ -210,9 +313,14 @@ async function festivalItems(origin, maxMinutes, visitDate) {
       matched_themes: ["season"]
     });
   }
+
   results.sort((a,b) => a.route_minutes - b.route_minutes);
   console.log("[festival result]", JSON.stringify({
-    date: targetDate, count: results.length, names: results.slice(0,10).map(x=>x.name)
+    date: targetDate,
+    regionCandidates: rows.length,
+    routed: routed.length,
+    count: results.length,
+    names: results.slice(0,10).map(x=>x.name)
   }));
   return results.slice(0, 10);
 }
