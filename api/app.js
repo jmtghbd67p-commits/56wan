@@ -94,6 +94,11 @@ function digits8(value) {
   return String(value || "").replace(/\D/g, "").slice(0, 8);
 }
 
+function isoDate8(value) {
+  const d = digits8(value);
+  return d.length === 8 ? `${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}` : "";
+}
+
 function rowsFrom(data) {
   const x =
     data?.response?.body?.items?.item ??
@@ -193,9 +198,23 @@ async function fetchFestivalRows(visitDate) {
 function normRegionName(v) {
   return String(v || "")
     .replace(/전남광주통합특별시/g, "전남")
+    .replace(/서울특별시/g, "서울")
+    .replace(/부산광역시/g, "부산")
+    .replace(/대구광역시/g, "대구")
+    .replace(/인천광역시/g, "인천")
+    .replace(/광주광역시/g, "광주")
+    .replace(/대전광역시/g, "대전")
+    .replace(/울산광역시/g, "울산")
+    .replace(/세종특별자치시/g, "세종")
+    .replace(/경기도/g, "경기")
+    .replace(/강원특별자치도|강원도/g, "강원")
+    .replace(/충청북도/g, "충북")
+    .replace(/충청남도/g, "충남")
+    .replace(/전북특별자치도|전라북도/g, "전북")
     .replace(/전라남도/g, "전남")
-    .replace(/강원특별자치도/g, "강원")
-    .replace(/제주특별자치도/g, "제주")
+    .replace(/경상북도/g, "경북")
+    .replace(/경상남도/g, "경남")
+    .replace(/제주특별자치도|제주도/g, "제주")
     .replace(/\s+/g, "")
     .trim();
 }
@@ -219,11 +238,14 @@ function graphKeyFor(region) {
   if (!region) return null;
   const district = normRegionName(region.district);
   const province = normRegionName(region.province);
+  const target = `${province}${district}`;
   const keys = Object.keys(SIGUNGU_GRAPH || {});
-  return keys.find(k => {
-    const n = normRegionName(k);
-    return n.includes(district) && (!province || n.includes(province));
-  }) || keys.find(k => normRegionName(k).includes(district)) || null;
+  return keys.find(k => normRegionName(k) === target)
+    || keys.find(k => {
+      const n = normRegionName(k);
+      return n.startsWith(province) && n.endsWith(district);
+    })
+    || null;
 }
 function allowedGraphRegions(region, maxMinutes) {
   const start = graphKeyFor(region);
@@ -249,10 +271,7 @@ function festivalInAllowedRegion(row, allowed) {
   const address = [recordValue(row, ["addr1","rdnmadr","roadNmAddr","lnmadr","address"]), recordValue(row, ["addr2"])]
     .filter(Boolean).join(" ");
   const n = normRegionName(address);
-  return allowed.some(r => {
-    const district = String(r).match(/([가-힣]+(?:시|군|구))$/)?.[1] || "";
-    return district && n.includes(normRegionName(district));
-  });
+  return allowed.some(r => n.includes(normRegionName(r)));
 }
 
 async function festivalItems(origin, maxMinutes, visitDate) {
@@ -307,9 +326,9 @@ async function festivalItems(origin, maxMinutes, visitDate) {
       route_estimated: false,
       family_evidence: 999,
       festival: true,
-      festival_period: [start,end].filter(Boolean).join(" ~ "),
-      festival_start: start,
-      festival_end: end,
+      festival_period: [isoDate8(start),isoDate8(end)].filter(Boolean).join(" ~ "),
+      festival_start: isoDate8(start),
+      festival_end: isoDate8(end),
       season_kind: "festival",
       matched_themes: ["season"]
     };
